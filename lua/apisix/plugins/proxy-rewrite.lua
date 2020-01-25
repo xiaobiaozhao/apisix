@@ -20,6 +20,7 @@ local pairs       = pairs
 local ipairs      = ipairs
 local ngx         = ngx
 local type        = type
+local re_sub      = ngx.re.sub
 
 
 local schema = {
@@ -29,7 +30,19 @@ local schema = {
             description = "new uri for upstream",
             type        = "string",
             minLength   = 1,
-            maxLength   = 4096
+            maxLength   = 4096,
+            pattern     = "^/.*",
+        },
+        regex_uri = {
+            description = "new uri that substitute from client uri " ..
+                          "for upstream, lower priority than uri property",
+            type        = "array",
+            maxItems    = 2,
+            minItems    = 2,
+            items       = {
+                description = "regex uri",
+                type = "string",
+            }
         },
         host = {
             description = "new host for upstream",
@@ -68,6 +81,15 @@ function _M.check_schema(conf)
     local ok, err = core.schema.check(schema, conf)
     if not ok then
         return false, err
+    end
+
+    if conf.regex_uri and #conf.regex_uri > 0 then
+        local _, _, err = re_sub("/fake_uri", conf.regex_uri[1],
+                                   conf.regex_uri[2], "jo")
+        if err then
+            return false, "invalid regex_uri(" .. conf.regex_uri[1] ..
+                            ", " .. conf.regex_uri[2] .. "): " .. err
+        end
     end
 
     --reform header from object into array, so can avoid use pairs, which is NYI
@@ -110,7 +132,23 @@ function _M.rewrite(conf, ctx)
         end
     end
 
-    local upstream_uri = conf.uri or ctx.var.uri
+    local upstream_uri = ctx.var.uri
+    if conf.uri ~= nil then
+        upstream_uri = conf.uri
+    elseif conf.regex_uri ~= nil then
+        local uri, _, err = re_sub(ctx.var.uri, conf.regex_uri[1],
+                                   conf.regex_uri[2], "jo")
+        if uri then
+            upstream_uri = uri
+        else
+            local msg = "failed to substitute the uri " .. ctx.var.uri ..
+                        " (" .. conf.regex_uri[1] .. ") with " ..
+                        conf.regex_uri[2] .. " : " .. err
+            core.log.error(msg)
+            return 500, {message = msg}
+        end
+    end
+
     if ctx.var.is_args == "?" then
         ctx.var.upstream_uri = upstream_uri .. "?" .. (ctx.var.args or "")
     else

@@ -55,9 +55,11 @@ done
 --- grep_error_log eval
 qr/loaded plugin and sort by priority: [-\d]+ name: [\w-]+/
 --- grep_error_log_out
+loaded plugin and sort by priority: 11000 name: fault-injection
 loaded plugin and sort by priority: 10000 name: serverless-pre-function
 loaded plugin and sort by priority: 3000 name: ip-restriction
 loaded plugin and sort by priority: 2599 name: openid-connect
+loaded plugin and sort by priority: 2520 name: basic-auth
 loaded plugin and sort by priority: 2510 name: jwt-auth
 loaded plugin and sort by priority: 2500 name: key-auth
 loaded plugin and sort by priority: 1008 name: proxy-rewrite
@@ -69,6 +71,7 @@ loaded plugin and sort by priority: 900 name: redirect
 loaded plugin and sort by priority: 899 name: response-rewrite
 loaded plugin and sort by priority: 506 name: grpc-transcode
 loaded plugin and sort by priority: 500 name: prometheus
+loaded plugin and sort by priority: 400 name: udp-logger
 loaded plugin and sort by priority: 0 name: example-plugin
 loaded plugin and sort by priority: -1000 name: zipkin
 loaded plugin and sort by priority: -2000 name: serverless-post-function

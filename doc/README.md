@@ -42,6 +42,7 @@ Plugins
 * [hot reload](plugins.md): Hot reload without reload service.
 * [key-auth](plugins/key-auth.md): User authentication based on Key Authentication.
 * [JWT-auth](plugins/jwt-auth.md): User authentication based on [JWT](https://jwt.io/) (JSON Web Tokens) Authentication.
+* [basic-auth](doc/plugins/basic-auth.md): User authentication based on Basic Authentication.
 * [HTTPS/TLS](https.md): Dynamic load the SSL Certificate by Server Name Indication (SNI).
 * [limit-count](plugins/limit-count.md): Rate limiting based on a "fixed window" implementation.
 * [limit-req](plugins/limit-req.md): Request rate limiting and adjustment based on the "leaky bucket" method.
@@ -49,13 +50,13 @@ Plugins
 * [proxy-rewrite](plugins/proxy-rewrite.md): Rewrite upstream request information.
 * [prometheus](plugins/prometheus.md): Expose metrics related to APISIX and proxied upstream services in Prometheus exposition format, which can be scraped by a Prometheus Server.
 * [OpenTracing](plugins/zipkin.md): Supports Zikpin and Apache SkyWalking.
-* [grpc-transcode](plugins/grpc-transcoding.md): REST <--> gRPC transcoding。
+* [grpc-transcode](plugins/grpc-transcoding.md): REST <--> gRPC transcoding.
 * [serverless](plugins/serverless.md)：Allows to dynamically run Lua code at *different* phase in APISIX.
 * [ip-restriction](plugins/ip-restriction.md): IP whitelist/blacklist.
-* openid-connect
+* [openid-connect](plugins/oauth.md)
 * [redirect](plugins/redirect.md): URI redirect.
 * [response-rewrite](plugins/response-rewrite.md): Set customized response status code, body and header to the client.
-
+* [fault-injection](plugins/fault-injection.md): The specified response body, response code, and response time can be returned, which provides processing capabilities in different failure scenarios, such as service failure, service overload, and high service delay.
 
 Deploy to the Cloud
 =======
