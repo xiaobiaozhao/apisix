@@ -43,20 +43,32 @@ script() {
     sudo mkdir -p /usr/local/apisix/deps
     sudo PATH=$PATH ./utils/install-apisix.sh install
 
-    sudo apisix help
-    sudo apisix init
-    sudo apisix start
-    sudo apisix stop
+    sudo PATH=$PATH apisix help
+    sudo PATH=$PATH apisix init
+    sudo PATH=$PATH apisix start
+    sudo PATH=$PATH apisix stop
 
     sudo PATH=$PATH ./utils/install-apisix.sh remove
 
     # install APISIX by luarocks
     sudo luarocks install rockspec/apisix-master-0.rockspec
 
-    sudo apisix help
-    sudo apisix init
-    sudo apisix start
-    sudo apisix stop
+    # show install files
+    luarocks show apisix
+
+    sudo PATH=$PATH apisix help
+    sudo PATH=$PATH apisix init
+    sudo PATH=$PATH apisix start
+    sudo PATH=$PATH apisix stop
+
+    # apisix cli test
+    sudo PATH=$PATH .travis/apisix_cli_test.sh
+
+    cat /usr/local/apisix/logs/error.log | grep '\[error\]' > /tmp/error.log | true
+    if [ -s /tmp/error.log ]; then
+        echo "=====found error log====="
+        cat /usr/local/apisix/logs/error.log
+    fi
 
     sudo luarocks remove rockspec/apisix-master-0.rockspec
 }
