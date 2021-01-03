@@ -25,27 +25,28 @@ local schema = {
     type = "object",
     properties = {
         headers = {
-            description = "new headers for repsonse",
+            description = "new headers for response",
             type = "object",
             minProperties = 1,
         },
         body = {
-            description = "new body for repsonse",
+            description = "new body for response",
             type = "string",
         },
         body_base64 = {
-            description = "whether new body for repsonse need base64 decode before return",
+            description = "whether new body for response need base64 decode before return",
             type = "boolean",
             default = false,
         },
         status_code = {
-            description = "new status code for repsonse",
+            description = "new status code for response",
             type = "integer",
             minimum = 200,
             maximum = 598,
         }
     },
     minProperties = 1,
+    additionalProperties = false,
 }
 
 
@@ -63,22 +64,19 @@ function _M.check_schema(conf)
         return false, err
     end
 
-    --reform header from object into array, so can avoid use pairs, which is NYI
     if conf.headers then
-        conf.headers_arr = {}
-
         for field, value in pairs(conf.headers) do
-            if type(field) == 'string'
-                and (type(value) == 'string' or type(value) == 'number') then
-                if #field == 0 then
-                    return false, 'invalid field length in header'
-                end
-                core.table.insert(conf.headers_arr, field)
-                core.table.insert(conf.headers_arr, value)
-            else
+            if type(field) ~= 'string' then
+                return false, 'invalid type as header field'
+            end
+
+            if type(value) ~= 'string' and type(value) ~= 'number' then
                 return false, 'invalid type as header value'
             end
 
+            if #field == 0 then
+                return false, 'invalid field length in header'
+            end
         end
     end
 
@@ -114,16 +112,25 @@ function _M.header_filter(conf, ctx)
     end
 
     if conf.body then
-        ngx.header.content_length = nil
-        -- in case of upstream content is compressed content
-        ngx.header.content_encoding = nil
+        core.response.clear_header_as_body_modified()
     end
 
-    if conf.headers_arr then
-        local field_cnt = #conf.headers_arr
-        for i = 1, field_cnt, 2 do
-            ngx.header[conf.headers_arr[i]] = conf.headers_arr[i+1]
+    if not conf.headers then
+        return
+    end
+
+    --reform header from object into array, so can avoid use pairs, which is NYI
+    if not conf.headers_arr then
+        conf.headers_arr = {}
+
+        for field, value in pairs(conf.headers) do
+            core.table.insert_tail(conf.headers_arr, field, value)
         end
+    end
+
+    local field_cnt = #conf.headers_arr
+    for i = 1, field_cnt, 2 do
+        ngx.header[conf.headers_arr[i]] = conf.headers_arr[i+1]
     end
 end
 

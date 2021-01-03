@@ -19,6 +19,7 @@ use t::APISIX 'no_plan';
 repeat_each(1);
 no_long_string();
 no_root_location();
+
 run_tests;
 
 __DATA__
@@ -169,7 +170,7 @@ hello world
     location /t {
         content_by_lua_block {
             local plugin = require("apisix.plugins.syslog")
-            local logger_socket = require "resty.logger.socket"
+            local logger_socket = require("resty.logger.socket")
             local logger, err = logger_socket:new({
                     host = "127.0.0.1",
                     port = 5044,
@@ -188,13 +189,16 @@ hello world
 
             local ok, err = plugin.flush_syslog(logger)
             if not ok then
-                ngx.say(err)
+                ngx.say("failed to flush syslog: ", err)
+                return
             end
             ngx.say("done")
         }
     }
 --- request
 GET /t
+--- response_body
+done
 --- no_error_log
 [error]
 
@@ -206,40 +210,106 @@ GET /t
         content_by_lua_block {
             local t = require("lib.test_admin").test
             local code, body = t('/apisix/admin/routes/1',
+                ngx.HTTP_PUT,
+                [[{
+                    "plugins": {
+                        "syslog": {
+                                "host" : "127.0.0.1",
+                                "port" : 5044,
+                                "flush_limit" : 1,
+                                "timeout": 1
+                            }
+                    },
+                    "upstream": {
+                        "nodes": {
+                            "127.0.0.1:1980": 1
+                        },
+                        "type": "roundrobin"
+                    },
+                    "uri": "/hello"
+                }]]
+            )
+
+            if code >= 300 then
+                ngx.status = code
+            end
+            ngx.say(body)
+
+            -- wait etcd sync
+            ngx.sleep(0.5)
+
+            local http = require "resty.http"
+            local httpc = http.new()
+            local uri = "http://127.0.0.1:" .. ngx.var.server_port .. "/hello"
+            local res, err = httpc:request_uri(uri, {method = "GET"})
+            if not res then
+                ngx.say("failed request: ", err)
+                return
+            end
+
+            if res.status >= 300 then
+                ngx.status = res.status
+            end
+            ngx.print(res.body)
+
+            -- wait flush log
+            ngx.sleep(2.5)
+        }
+    }
+--- request
+GET /t
+--- response_body
+passed
+hello world
+--- no_error_log
+[error]
+--- error_log
+try to lock with key route#1
+unlock with key route#1
+--- timeout: 5
+
+
+
+=== TEST 8: check plugin configuration updating
+--- config
+    location /t {
+        content_by_lua_block {
+            local t = require("lib.test_admin").test
+            local code, body1 = t('/apisix/admin/routes/1',
                  ngx.HTTP_PUT,
                  [[{
                         "plugins": {
                             "syslog": {
-                                 "host" : "127.0.0.1",
-                                 "port" : 5044,
-                                 "flush_limit" : 1
-                              }
+                                "host": "127.0.0.1",
+                                "port": 5044,
+                                "batch_max_size": 1
+                            }
                         },
                         "upstream": {
                             "nodes": {
-                                "127.0.0.1:1980": 1
+                                "127.0.0.1:1982": 1
                             },
                             "type": "roundrobin"
                         },
-                        "uri": "/hello"
+                        "uri": "/opentracing"
                 }]],
                 [[{
                     "node": {
                         "value": {
                             "plugins": {
                                 "syslog": {
-                                 "host" : "127.0.0.1",
-                                 "port" : 5044,
-                                 "flush_limit" : 1
-                              }
+                                    "host": "127.0.0.1",
+                                    "port": 5044,
+                                    "batch_max_size": 1
+                                }
                             },
                             "upstream": {
                                 "nodes": {
-                                    "127.0.0.1:1980": 1
+                                    "127.0.0.1:1982": 1
                                 },
                                 "type": "roundrobin"
                             },
-                            "uri": "/hello"
+                            "uri": "/opentracing"
                         },
                         "key": "/apisix/routes/1"
                     },
@@ -249,19 +319,86 @@ GET /t
 
             if code >= 300 then
                 ngx.status = code
+                ngx.say("fail")
+                return
             end
 
-            ngx.say(body)
+            local code, _, body2 = t("/opentracing", "GET")
+            if code >= 300 then
+                ngx.status = code
+                ngx.say("fail")
+                return
+            end
 
-            local http = require "resty.http"
-            local httpc = http.new()
-            local uri = "http://127.0.0.1:" .. ngx.var.server_port .. "/hello"
-            local res, err = httpc:request_uri(uri, {method = "GET"})
+            local code, body3 = t('/apisix/admin/routes/1',
+                 ngx.HTTP_PUT,
+                 [[{
+                        "plugins": {
+                            "syslog": {
+                                "host": "127.0.0.1",
+                                "port": 5045,
+                                "batch_max_size": 1
+                            }
+                        },
+                        "upstream": {
+                            "nodes": {
+                                "127.0.0.1:1982": 1
+                            },
+                            "type": "roundrobin"
+                        },
+                        "uri": "/opentracing"
+                }]],
+                [[{
+                    "node": {
+                        "value": {
+                            "plugins": {
+                                "syslog": {
+                                    "host": "127.0.0.1",
+                                    "port": 5045,
+                                    "batch_max_size": 1
+                                }
+                            },
+                            "upstream": {
+                                "nodes": {
+                                    "127.0.0.1:1982": 1
+                                },
+                                "type": "roundrobin"
+                            },
+                            "uri": "/opentracing"
+                        },
+                        "key": "/apisix/routes/1"
+                    },
+                    "action": "set"
+                }]]
+                )
+
+            if code >= 300 then
+                ngx.status = code
+                ngx.say("fail")
+                return
+            end
+
+            local code, _, body4 = t("/opentracing", "GET")
+            if code >= 300 then
+                ngx.status = code
+                ngx.say("fail")
+                return
+            end
+
+            ngx.print(body1)
+            ngx.print(body2)
+            ngx.print(body3)
+            ngx.print(body4)
         }
     }
 --- request
-GET /hello
-hello world
---- no_error_log
-[error]
---- wait: 0.2
+GET /t
+--- wait: 0.5
+--- response_body
+passedopentracing
+passedopentracing
+--- grep_error_log eval
+qr/sending a batch logs to 127.0.0.1:(\d+)/
+--- grep_error_log_out
+sending a batch logs to 127.0.0.1:5044
+sending a batch logs to 127.0.0.1:5045

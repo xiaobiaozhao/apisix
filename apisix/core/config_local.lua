@@ -14,32 +14,15 @@
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
 --
-local log = require("apisix.core.log")
-local profile = require("apisix.core.profile")
-local yaml = require("tinyyaml")
-local io_open = io.open
-local type = type
 
-local local_conf_path = profile:yaml_path("config")
+local file = require("apisix.cli.file")
+
+
+local _M = {}
+
+
 local config_data
 
-
-local _M = {
-    version = 0.2,
-}
-
-
-local function read_file(path)
-    local file, err = io_open(path, "rb")   -- read as binary mode
-    if not file then
-        log.error("failed to read config file:" .. path, ", error info:", err)
-        return nil, err
-    end
-
-    local content = file:read("*a") -- `*a` reads the whole file
-    file:close()
-    return content
-end
 
 function _M.clear_cache()
     config_data = nil
@@ -51,12 +34,12 @@ function _M.local_conf(force)
         return config_data
     end
 
-    local yaml_config, err = read_file(local_conf_path)
-    if type(yaml_config) ~= "string" then
-        return nil, "failed to read config file:" .. err
+    local default_conf, err = file.read_yaml_conf()
+    if not default_conf then
+        return nil, err
     end
 
-    config_data = yaml.parse(yaml_config)
+    config_data = default_conf
     return config_data
 end
 

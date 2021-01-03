@@ -17,8 +17,13 @@
 local core        = require("apisix.core")
 local ngx         = ngx
 local plugin_name = "cors"
-local str_find    = string.find
+local str_find    = core.string.find
 local re_gmatch   = ngx.re.gmatch
+
+
+local lrucache = core.lrucache.new({
+    type = "plugin",
+})
 
 local schema = {
     type = "object",
@@ -42,6 +47,7 @@ local schema = {
         allow_headers = {
             description =
                 "you can use '*' to allow all header when no credentials," ..
+                "'**' to allow forcefully(it will bring some security risks, be carefully)," ..
                 "multiple header use ',' to split. default: *.",
             type = "string",
             default = "*"
@@ -62,9 +68,12 @@ local schema = {
             default = 5
         },
         allow_credential = {
+            description =
+                "allow client append credential. according to CORS specification," ..
+                "if you set this option to 'true', you can not use '*' for other options.",
             type = "boolean",
             default = false
-        },
+        }
     }
 }
 
@@ -75,8 +84,9 @@ local _M = {
     schema = schema,
 }
 
-local function create_mutiple_origin_cache(conf)
-    if not str_find(conf.allow_origins, ",", 1, true) then
+
+local function create_multiple_origin_cache(conf)
+    if not str_find(conf.allow_origins, ",") then
         return nil
     end
     local origin_cache = {}
@@ -99,14 +109,22 @@ local function create_mutiple_origin_cache(conf)
     return origin_cache
 end
 
+
 function _M.check_schema(conf)
     local ok, err = core.schema.check(schema, conf)
     if not ok then
         return false, err
     end
+    if conf.allow_credential then
+        if conf.allow_origins == "*" or conf.allow_methods == "*" or
+            conf.allow_headers == "*" or conf.expose_headers == "*" then
+            return false, "you can not set '*' for other option when 'allow_credential' is true"
+        end
+    end
 
     return true
 end
+
 
 local function set_cors_headers(conf, ctx)
     local allow_methods = conf.allow_methods
@@ -114,26 +132,43 @@ local function set_cors_headers(conf, ctx)
         allow_methods = "GET,POST,PUT,DELETE,PATCH,HEAD,OPTIONS,CONNECT,TRACE"
     end
 
-    ngx.header["Access-Control-Allow-Origin"] = ctx.cors_allow_origins
-    ngx.header["Access-Control-Allow-Methods"] = allow_methods
-    ngx.header["Access-Control-Allow-Headers"] = conf.allow_headers
-    ngx.header["Access-Control-Max-Age"] = conf.max_age
-    if conf.allow_credential then
-        ngx.header["Access-Control-Allow-Credentials"] = true
+    core.response.set_header("Access-Control-Allow-Origin", ctx.cors_allow_origins)
+    if ctx.cors_allow_origins ~= "*" then
+        core.response.add_header("Vary", "Origin")
     end
-    ngx.header["Access-Control-Expose-Headers"] = conf.expose_headers
+
+    core.response.set_header("Access-Control-Allow-Methods", allow_methods)
+    core.response.set_header("Access-Control-Max-Age", conf.max_age)
+    core.response.set_header("Access-Control-Expose-Headers", conf.expose_headers)
+    if conf.allow_headers == "**" then
+        core.response.set_header("Access-Control-Allow-Headers",
+            core.request.header(ctx, "Access-Control-Request-Headers"))
+    else
+        core.response.set_header("Access-Control-Allow-Headers", conf.allow_headers)
+    end
+    if conf.allow_credential then
+        core.response.set_header("Access-Control-Allow-Credentials", true)
+    end
 end
 
+
 function _M.rewrite(conf, ctx)
+    if ctx.var.request_method == "OPTIONS" then
+        return 200
+    end
+end
+
+
+function _M.header_filter(conf, ctx)
     local allow_origins = conf.allow_origins
     local req_origin = core.request.header(ctx, "Origin")
     if allow_origins == "**" then
         allow_origins = req_origin or '*'
     end
-    local multiple_origin, err = core.lrucache.plugin_ctx(plugin_name, ctx,
-                                                create_mutiple_origin_cache, conf)
+    local multiple_origin, err = core.lrucache.plugin_ctx(lrucache, ctx, nil,
+                                                create_multiple_origin_cache, conf)
     if err then
-        return 500, {message = "get mutiple origin cache failed: " .. err}
+        return 500, {message = "get multiple origin cache failed: " .. err}
     end
 
     if multiple_origin then
@@ -146,10 +181,6 @@ function _M.rewrite(conf, ctx)
 
     ctx.cors_allow_origins = allow_origins
     set_cors_headers(conf, ctx)
-
-    if ctx.var.request_method == "OPTIONS" then
-        return 200
-    end
 end
 
 return _M

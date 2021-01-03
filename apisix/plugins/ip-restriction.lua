@@ -18,7 +18,7 @@ local ipairs    = ipairs
 local core      = require("apisix.core")
 local ipmatcher = require("resty.ipmatcher")
 local str_sub   = string.sub
-local str_find  = string.find
+local str_find  = core.string.find
 local tonumber  = tonumber
 local lrucache  = core.lrucache.new({
     ttl = 300, count = 512
@@ -27,21 +27,31 @@ local lrucache  = core.lrucache.new({
 
 local schema = {
     type = "object",
-    properties = {
-        whitelist = {
-            type = "array",
-            items = {type = "string", anyOf = core.schema.ip_def},
-            minItems = 1
-        },
-        blacklist = {
-            type = "array",
-            items = {type = "string", anyOf = core.schema.ip_def},
-            minItems = 1
-        }
-    },
     oneOf = {
-        {required = {"whitelist"}},
-        {required = {"blacklist"}}
+        {
+            title = "whitelist",
+            properties = {
+                whitelist = {
+                    type = "array",
+                    items = {anyOf = core.schema.ip_def},
+                    minItems = 1
+                },
+            },
+            required = {"whitelist"},
+            additionalProperties = false,
+        },
+        {
+            title = "blacklist",
+            properties = {
+                blacklist = {
+                    type = "array",
+                    items = {anyOf = core.schema.ip_def},
+                    minItems = 1
+                }
+            },
+            required = {"blacklist"},
+            additionalProperties = false,
+        }
     }
 }
 
@@ -59,7 +69,7 @@ local _M = {
 
 local function valid_ip(ip)
     local mask = 0
-    local sep_pos = str_find(ip, "/", 1, true)
+    local sep_pos = str_find(ip, "/")
     if sep_pos then
         mask = str_sub(ip, sep_pos + 1)
         mask = tonumber(mask)
@@ -90,6 +100,7 @@ function _M.check_schema(conf)
         return false, err
     end
 
+    -- we still need this as it is too complex to filter out all invalid IPv6 via regex
     if conf.whitelist and #conf.whitelist > 0 then
         for _, cidr in ipairs(conf.whitelist) do
             if not valid_ip(cidr) then

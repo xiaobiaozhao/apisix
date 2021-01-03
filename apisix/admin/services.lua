@@ -18,9 +18,11 @@ local core = require("apisix.core")
 local get_routes = require("apisix.router").http_routes
 local schema_plugin = require("apisix.admin.plugins").check_schema
 local upstreams = require("apisix.admin.upstreams")
+local utils = require("apisix.admin.utils")
 local tostring = tostring
 local ipairs = ipairs
 local type = type
+local loadstring = loadstring
 
 
 local _M = {
@@ -91,6 +93,18 @@ local function check_conf(id, conf, need_id)
         end
     end
 
+    if conf.script then
+        local obj, err = loadstring(conf.script)
+        if not obj then
+            return nil, {error_msg = "failed to load 'script' string: "
+                                     .. err}
+        end
+
+        if type(obj()) ~= "table" then
+            return nil, {error_msg = "'script' should be a Lua object"}
+        end
+    end
+
     return need_id and id or true
 end
 
@@ -103,6 +117,12 @@ function _M.put(id, conf)
 
     local key = "/services/" .. id
     core.log.info("key: ", key)
+
+    local ok, err = utils.inject_conf_with_prev_conf("service", key, conf)
+    if not ok then
+        return 500, {error_msg = err}
+    end
+
     local res, err = core.etcd.set(key, conf)
     if not res then
         core.log.error("failed to put service[", key, "]: ", err)
@@ -119,7 +139,7 @@ function _M.get(id)
         key = key .. "/" .. id
     end
 
-    local res, err = core.etcd.get(key)
+    local res, err = core.etcd.get(key, not id)
     if not res then
         core.log.error("failed to get service[", key, "]: ", err)
         return 500, {error_msg = err}
@@ -136,6 +156,7 @@ function _M.post(id, conf)
     end
 
     local key = "/services"
+    utils.inject_timestamp(conf)
     local res, err = core.etcd.push(key, conf)
     if not res then
         core.log.error("failed to post service[", key, "]: ", err)
@@ -177,7 +198,7 @@ function _M.delete(id)
 end
 
 
-function _M.patch(id, conf)
+function _M.patch(id, conf, sub_path)
     if not id then
         return 400, {error_msg = "missing service id"}
     end
@@ -186,8 +207,10 @@ function _M.patch(id, conf)
         return 400, {error_msg = "missing new configuration"}
     end
 
-    if type(conf) ~= "table"  then
-        return 400, {error_msg = "invalid configuration"}
+    if not sub_path or sub_path == "" then
+        if type(conf) ~= "table"  then
+            return 400, {error_msg = "invalid configuration"}
+        end
     end
 
     local key = "/services" .. "/" .. id
@@ -203,19 +226,29 @@ function _M.patch(id, conf)
     core.log.info("key: ", key, " old value: ",
                   core.json.delay_encode(res_old, true))
 
-    local new_value = res_old.body.node.value
+    local node_value = res_old.body.node.value
+    local modified_index = res_old.body.node.modifiedIndex
 
-    new_value = core.table.merge(new_value, conf);
+    if sub_path and sub_path ~= "" then
+        local code, err, node_val = core.table.patch(node_value, sub_path, conf)
+        node_value = node_val
+        if code then
+            return code, err
+        end
+    else
+        node_value = core.table.merge(node_value, conf);
+    end
 
-    core.log.info("new value ", core.json.delay_encode(new_value, true))
+    utils.inject_timestamp(node_value, nil, conf)
 
-    local id, err = check_conf(id, new_value, true)
+    core.log.info("new value ", core.json.delay_encode(node_value, true))
+
+    local id, err = check_conf(id, node_value, true)
     if not id then
         return 400, err
     end
 
-    -- TODO: this is not safe, we need to use compare-set
-    local res, err = core.etcd.set(key, new_value)
+    local res, err = core.etcd.atomic_set(key, node_value, nil, modified_index)
     if not res then
         core.log.error("failed to set new service[", key, "]: ", err)
         return 500, {error_msg = err}

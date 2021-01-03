@@ -20,8 +20,10 @@ local setmetatable = setmetatable
 local select       = select
 local new_tab      = require("table.new")
 local nkeys        = require("table.nkeys")
+local ipairs       = ipairs
 local pairs        = pairs
 local type         = type
+local ngx_re       = require("ngx.re")
 
 
 local _M = {
@@ -31,6 +33,7 @@ local _M = {
     nkeys   = nkeys,
     insert  = table.insert,
     concat  = table.concat,
+    sort    = table.sort,
     clone   = require("table.clone"),
     isarray = require("table.isarray"),
 }
@@ -54,6 +57,33 @@ function _M.set(tab, ...)
     for i = 1, select('#', ...) do
         tab[i] = select(i, ...)
     end
+end
+
+
+function _M.try_read_attr(tab, ...)
+    local count = select('#', ...)
+
+    for i = 1, count do
+        local attr = select(i, ...)
+        if type(tab) ~= "table" then
+            return nil
+        end
+
+        tab = tab[attr]
+    end
+
+    return tab
+end
+
+
+function _M.array_find(array, val)
+    for i, v in ipairs(array) do
+        if v == val then
+            return i
+        end
+    end
+
+    return nil
 end
 
 
@@ -90,7 +120,11 @@ local function merge(origin, extend)
     for k,v in pairs(extend) do
         if type(v) == "table" then
             if type(origin[k] or false) == "table" then
-                merge(origin[k] or {}, extend[k] or {})
+                if _M.nkeys(origin[k]) ~= #origin[k] then
+                    merge(origin[k] or {}, extend[k] or {})
+                else
+                    origin[k] = v
+                end
             else
                 origin[k] = v
             end
@@ -104,5 +138,96 @@ local function merge(origin, extend)
     return origin
 end
 _M.merge = merge
+
+
+local function patch(node_value, sub_path, conf)
+    local sub_value = node_value
+    local sub_paths = ngx_re.split(sub_path, "/")
+    for i = 1, #sub_paths - 1 do
+        local sub_name = sub_paths[i]
+        if sub_value[sub_name] == nil then
+            sub_value[sub_name] = {}
+        end
+
+        sub_value = sub_value[sub_name]
+
+        if type(sub_value) ~= "table" then
+            return 400, "invalid sub-path: /"
+                      .. _M.concat(sub_paths, 1, i)
+        end
+    end
+
+    if type(sub_value) ~= "table" then
+        return 400, "invalid sub-path: /" .. sub_path
+    end
+
+    local sub_name = sub_paths[#sub_paths]
+    if sub_name and sub_name ~= "" then
+        sub_value[sub_name] = conf
+    else
+        node_value = conf
+    end
+
+    return nil, nil, node_value
+end
+_M.patch = patch
+
+
+-- Compare two tables as if they are sets (only compare the key part)
+function _M.set_eq(a, b)
+    if nkeys(a) ~= nkeys(b) then
+        return false
+    end
+
+    for k in pairs(a) do
+        if b[k] == nil then
+            return false
+        end
+    end
+
+    return true
+end
+
+
+-- Compare two elements, including their descendants
+local function deep_eq(a, b)
+    local type_a = type(a)
+    local type_b = type(b)
+
+    if type_a ~= 'table' or type_b ~= 'table' then
+        return a == b
+    end
+
+    local n_a = nkeys(a)
+    local n_b = nkeys(b)
+    if n_a ~= n_b then
+        return false
+    end
+
+    for k, v_a in pairs(a) do
+        local v_b = b[k]
+        local eq = deep_eq(v_a, v_b)
+        if not eq then
+            return false
+        end
+    end
+
+    return true
+end
+_M.deep_eq = deep_eq
+
+
+-- pick takes the given attributes out of object
+function _M.pick(obj, attrs)
+    local data = {}
+    for k, v in pairs(obj) do
+        if attrs[k] ~= nil then
+            data[k] = v
+        end
+    end
+
+    return data
+end
+
 
 return _M

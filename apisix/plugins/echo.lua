@@ -36,21 +36,22 @@ local schema = {
             type = "string"
         },
         headers = {
-            description = "new headers for repsonse",
+            description = "new headers for response",
             type = "object",
             minProperties = 1,
         },
         auth_value = {
             description = "auth value",
             type = "string"
-        }
+        },
     },
     anyOf = {
         {required = {"before_body"}},
         {required = {"body"}},
         {required = {"after_body"}}
     },
-    minProperties = 1
+    minProperties = 1,
+    additionalProperties = false,
 }
 
 local plugin_name = "echo"
@@ -62,8 +63,54 @@ local _M = {
     schema = schema,
 }
 
+
 function _M.check_schema(conf)
-    if conf.headers then
+    local ok, err = core.schema.check(schema, conf)
+    if not ok then
+        return false, err
+    end
+
+    return true
+end
+
+
+function _M.body_filter(conf, ctx)
+    if conf.body then
+        ngx.arg[1] = conf.body
+        ngx.arg[2] = true
+    end
+
+    if conf.before_body and not ctx.plugin_echo_body_set then
+        ngx.arg[1] = conf.before_body ..  ngx.arg[1]
+        ctx.plugin_echo_body_set = true
+    end
+
+    if ngx.arg[2] and conf.after_body then
+        ngx.arg[1] = ngx.arg[1] .. conf.after_body
+    end
+end
+
+
+function _M.access(conf, ctx)
+    local value = core.request.header(ctx, "Authorization")
+
+    if value ~= conf.auth_value then
+        return 401, "unauthorized body"
+    end
+
+end
+
+
+function _M.header_filter(conf, ctx)
+    if conf.body or conf.before_body or conf.after_body then
+        core.response.clear_header_as_body_modified()
+    end
+
+    if not conf.headers then
+        return
+    end
+
+    if not conf.headers_arr then
         conf.headers_arr = {}
 
         for field, value in pairs(conf.headers) do
@@ -80,39 +127,9 @@ function _M.check_schema(conf)
         end
     end
 
-    return core.schema.check(schema, conf)
-end
-
-function _M.body_filter(conf, ctx)
-    if conf.body then
-        ngx.arg[1] = conf.body
-    end
-
-    if conf.before_body then
-        ngx.arg[1] = conf.before_body ..  ngx.arg[1]
-    end
-
-    if conf.after_body then
-        ngx.arg[1] = ngx.arg[1] .. conf.after_body
-    end
-    ngx.arg[2] = true
-end
-
-function _M.access(conf, ctx)
-    local value = core.request.header(ctx, "Authorization")
-
-    if value ~= conf.auth_value then
-        return 401, "unauthorized body"
-    end
-
-end
-
-function _M.header_filter(conf, ctx)
-    if conf.headers_arr then
-        local field_cnt = #conf.headers_arr
-        for i = 1, field_cnt, 2 do
-            ngx.header[conf.headers_arr[i]] = conf.headers_arr[i+1]
-        end
+    local field_cnt = #conf.headers_arr
+    for i = 1, field_cnt, 2 do
+        ngx.header[conf.headers_arr[i]] = conf.headers_arr[i+1]
     end
 end
 

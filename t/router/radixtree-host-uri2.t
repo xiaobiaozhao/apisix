@@ -22,22 +22,15 @@ worker_connections(256);
 no_root_location();
 no_shuffle();
 
-sub read_file($) {
-    my $infile = shift;
-    open my $in, $infile
-        or die "cannot open $infile for reading: $!";
-    my $cert = do { local $/; <$in> };
-    close $in;
-    $cert;
-}
-
-our $yaml_config = read_file("conf/config.yaml");
-$yaml_config =~ s/node_listen: 9080/node_listen: 1984/;
-$yaml_config =~ s/enable_heartbeat: true/enable_heartbeat: false/;
-$yaml_config =~ s/config_center: etcd/config_center: yaml/;
-$yaml_config =~ s/enable_admin: true/enable_admin: false/;
-$yaml_config =~ s/http: 'radixtree_uri'/http: 'radixtree_host_uri'/;
-$yaml_config =~ s/admin_key:/disable_admin_key:/;
+our $yaml_config = <<_EOC_;
+apisix:
+    node_listen: 1984
+    config_center: yaml
+    enable_admin: false
+    router:
+        http: 'radixtree_host_uri'
+    admin_key: null
+_EOC_
 
 run_tests();
 
@@ -200,5 +193,144 @@ Host: www.test.com
 qr/1981/
 --- error_log
 use config_center: yaml
+--- no_error_log
+[error]
+
+
+
+=== TEST 6: set route with ':'
+--- yaml_config
+apisix:
+    node_listen: 1984
+    router:
+        http: 'radixtree_host_uri'
+    admin_key: null
+--- config
+    location /t {
+        content_by_lua_block {
+            local t = require("lib.test_admin").test
+            local code, body = t('/apisix/admin/routes/1',
+                ngx.HTTP_PUT,
+                [[{
+                    "uri": "/file:listReputationHistories",
+                    "plugins":{"proxy-rewrite":{"uri":"/hello"}},
+                    "upstream": {
+                        "nodes": {
+                            "127.0.0.1:1980": 1
+                        },
+                        "type": "roundrobin"
+                    }
+                }]]
+            )
+
+            if code >= 300 then
+                ngx.status = code
+            end
+            ngx.say(body)
+        }
+    }
+--- request
+GET /t
+--- response_body
+passed
+--- no_error_log
+[error]
+
+
+
+=== TEST 7: hit routes
+--- yaml_config
+apisix:
+    router:
+        http: 'radixtree_host_uri'
+--- request
+GET /file:listReputationHistories
+--- response_body
+hello world
+--- no_error_log
+[error]
+
+
+
+=== TEST 8: not hit
+--- yaml_config
+apisix:
+    router:
+        http: 'radixtree_host_uri'
+--- request
+GET /file:xx
+--- error_code: 404
+--- no_error_log
+[error]
+
+
+
+=== TEST 9: set route with ':' & host
+--- yaml_config
+apisix:
+    node_listen: 1984
+    router:
+        http: 'radixtree_host_uri'
+    admin_key: null
+--- config
+    location /t {
+        content_by_lua_block {
+            local t = require("lib.test_admin").test
+            local code, body = t('/apisix/admin/routes/1',
+                ngx.HTTP_PUT,
+                [[{
+                    "uri": "/do:listReputationHistories",
+                    "hosts": ["t.com"],
+                    "plugins":{"proxy-rewrite":{"uri":"/hello"}},
+                    "upstream": {
+                        "nodes": {
+                            "127.0.0.1:1980": 1
+                        },
+                        "type": "roundrobin"
+                    }
+                }]]
+            )
+
+            if code >= 300 then
+                ngx.status = code
+            end
+            ngx.say(body)
+        }
+    }
+--- request
+GET /t
+--- response_body
+passed
+--- no_error_log
+[error]
+
+
+
+=== TEST 10: hit routes
+--- yaml_config
+apisix:
+    router:
+        http: 'radixtree_host_uri'
+--- request
+GET /do:listReputationHistories
+--- more_headers
+Host: t.com
+--- response_body
+hello world
+--- no_error_log
+[error]
+
+
+
+=== TEST 11: not hit
+--- yaml_config
+apisix:
+    router:
+        http: 'radixtree_host_uri'
+--- request
+GET /do:xx
+--- more_headers
+Host: t.com
+--- error_code: 404
 --- no_error_log
 [error]

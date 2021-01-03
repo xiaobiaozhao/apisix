@@ -51,7 +51,7 @@ local schema = {
         keepalive = {type = "boolean", default = true},
         keepalive_timeout = {type = "integer", minimum = 1000, default = 60000},
         keepalive_pool = {type = "integer", minimum = 1, default = 5},
-
+        ssl_verify = {type = "boolean", default = true},
     },
     required = {"token_endpoint"}
 }
@@ -60,7 +60,6 @@ local schema = {
 local _M = {
     version = 0.1,
     priority = 2000,
-    type = 'auth',
     name = plugin_name,
     schema = schema,
 }
@@ -92,8 +91,7 @@ local function evaluate_permissions(conf, token)
     end
 
     if not is_path_protected(conf) and conf.policy_enforcement_mode == "ENFORCING" then
-        core.response.exit(403)
-        return
+        return 403
     end
 
     local httpc = http.new()
@@ -107,6 +105,7 @@ local function evaluate_permissions(conf, token)
             response_mode = "decision",
             permission = conf.permissions
         }),
+        ssl_verify = conf.ssl_verify,
         headers = {
             ["Content-Type"] = "application/x-www-form-urlencoded",
             ["Authorization"] = token
@@ -125,19 +124,18 @@ local function evaluate_permissions(conf, token)
     if not httpc_res then
         core.log.error("error while sending authz request to [", host ,"] port[",
                         tostring(port), "] ", httpc_err)
-        core.response.exit(500, httpc_err)
-        return
+        return 500, httpc_err
     end
 
     if httpc_res.status >= 400 then
         core.log.error("status code: ", httpc_res.status, " msg: ", httpc_res.body)
-        core.response.exit(httpc_res.status, httpc_res.body)
+        return httpc_res.status, httpc_res.body
     end
 end
 
 
 local function fetch_jwt_token(ctx)
-    local token = core.request.header(ctx, "authorization")
+    local token = core.request.header(ctx, "Authorization")
     if not token then
         return nil, "authorization header not available"
     end
@@ -150,15 +148,18 @@ local function fetch_jwt_token(ctx)
 end
 
 
-function _M.rewrite(conf, ctx)
-    core.log.debug("hit keycloak-auth rewrite")
+function _M.access(conf, ctx)
+    core.log.debug("hit keycloak-auth access")
     local jwt_token, err = fetch_jwt_token(ctx)
     if not jwt_token then
         core.log.error("failed to fetch JWT token: ", err)
         return 401, {message = "Missing JWT token in request"}
     end
 
-    evaluate_permissions(conf, jwt_token)
+    local status, body = evaluate_permissions(conf, jwt_token)
+    if status then
+        return status, body
+    end
 end
 
 

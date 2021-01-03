@@ -16,19 +16,23 @@
 --
 local limit_conn_new = require("resty.limit.conn").new
 local core = require("apisix.core")
-local sleep = ngx.sleep
+local sleep = core.sleep
 local plugin_name = "limit-conn"
 
+
+local lrucache = core.lrucache.new({
+    type = "plugin",
+})
 
 local schema = {
     type = "object",
     properties = {
-        conn = {type = "integer", minimum = 0},
+        conn = {type = "integer", exclusiveMinimum = 0},
         burst = {type = "integer",  minimum = 0},
-        default_conn_delay = {type = "number", minimum = 0},
+        default_conn_delay = {type = "number", exclusiveMinimum = 0},
         key = {type = "string",
             enum = {"remote_addr", "server_addr", "http_x_real_ip",
-                    "http_x_forwarded_for"},
+                    "http_x_forwarded_for", "consumer_name"},
         },
         rejected_code = {type = "integer", minimum = 200, default = 503},
     },
@@ -61,8 +65,7 @@ end
 
 function _M.access(conf, ctx)
     core.log.info("ver: ", ctx.conf_version)
-    local lim, err = core.lrucache.plugin_ctx(plugin_name, ctx,
-                                              create_limit_obj, conf)
+    local lim, err = lrucache(conf, nil, create_limit_obj, conf)
     if not lim then
         core.log.error("failed to instantiate a resty.limit.conn object: ", err)
         return 500
@@ -82,9 +85,11 @@ function _M.access(conf, ctx)
     end
 
     if lim:is_committed() then
-        ctx.limit_conn = lim
-        ctx.limit_conn_key = key
-        ctx.limit_conn_delay = delay
+        if not ctx.limit_conn then
+            ctx.limit_conn = core.tablepool.fetch("plugin#limit-conn", 0, 6)
+        end
+
+        core.table.insert_tail(ctx.limit_conn, lim, key, delay)
     end
 
     if delay >= 0.001 then
@@ -94,23 +99,35 @@ end
 
 
 function _M.log(conf, ctx)
-    local lim = ctx.limit_conn
-    if lim then
+    local limit_conn = ctx.limit_conn
+    if not limit_conn then
+        return
+    end
+
+    for i = 1, #limit_conn, 3 do
+        local lim = limit_conn[i]
+        local key = limit_conn[i + 1]
+        local delay = limit_conn[i + 2]
+
         local latency
         if ctx.proxy_passed then
             latency = ctx.var.upstream_response_time
         else
-            latency = ctx.var.request_time - ctx.limit_conn_delay
+            latency = ctx.var.request_time - delay
         end
 
-        local key = ctx.limit_conn_key
+        core.log.debug("request latency is ", latency) -- for test
+
         local conn, err = lim:leaving(key, latency)
         if not conn then
             core.log.error("failed to record the connection leaving request: ",
                            err)
-            return
+            break
         end
     end
+
+    core.tablepool.release("plugin#limit-conn", limit_conn)
+    return
 end
 
 

@@ -16,23 +16,7 @@
 # limitations under the License.
 #
 
-set -ex
-
-export_or_prefix() {
-    export OPENRESTY_PREFIX="/usr/local/openresty-debug"
-}
-
-create_lua_deps() {
-    echo "Create lua deps cache"
-
-    rm -rf deps
-    make deps
-    luarocks install luacov-coveralls --tree=deps --local > build.log 2>&1 || (cat build.log && exit 1)
-
-    sudo rm -rf build-cache/deps
-    sudo cp -r deps build-cache/
-    sudo cp rockspec/apisix-master-0.rockspec build-cache/
-}
+. ./.travis/common.sh
 
 before_install() {
     sudo cpanm --notest Test::Nginx >build.log 2>&1 || (cat build.log && exit 1)
@@ -40,7 +24,7 @@ before_install() {
     docker run --rm -itd -p 6379:6379 --name apisix_redis redis:3.0-alpine
     docker run --rm -itd -e HTTP_PORT=8888 -e HTTPS_PORT=9999 -p 8888:8888 -p 9999:9999 mendhak/http-https-echo
     # Runs Keycloak version 10.0.2 with inbuilt policies for unit tests
-    docker run --rm -itd -e KEYCLOAK_USER=admin -e KEYCLOAK_PASSWORD=123456 -p 8090:8080 sshniro/keycloak-apisix
+    docker run --rm -itd -e KEYCLOAK_USER=admin -e KEYCLOAK_PASSWORD=123456 -p 8090:8080 -p 8443:8443 sshniro/keycloak-apisix
     # spin up kafka cluster for tests (1 zookeper and 1 kafka instance)
     docker pull bitnami/zookeeper:3.6.0
     docker pull bitnami/kafka:latest
@@ -50,7 +34,7 @@ before_install() {
     docker pull bitinit/eureka
     docker run --name eureka -d -p 8761:8761 --env ENVIRONMENT=apisix --env spring.application.name=apisix-eureka --env server.port=8761 --env eureka.instance.ip-address=127.0.0.1 --env eureka.client.registerWithEureka=true --env eureka.client.fetchRegistry=false --env eureka.client.serviceUrl.defaultZone=http://127.0.0.1:8761/eureka/ bitinit/eureka
     sleep 5
-    docker exec -it kafka-server1 /opt/bitnami/kafka/bin/kafka-topics.sh --create --zookeeper zookeeper-server:2181 --replication-factor 1 --partitions 1 --topic test2
+    docker exec -i kafka-server1 /opt/bitnami/kafka/bin/kafka-topics.sh --create --zookeeper zookeeper-server:2181 --replication-factor 1 --partitions 1 --topic test2
 }
 
 tengine_install() {
@@ -63,26 +47,15 @@ tengine_install() {
         return
     fi
 
-    export OPENRESTY_VERSION=1.15.8.3
+    export OPENRESTY_VERSION=1.17.8.2
     wget https://openresty.org/download/openresty-$OPENRESTY_VERSION.tar.gz
     tar zxf openresty-$OPENRESTY_VERSION.tar.gz
     wget https://codeload.github.com/alibaba/tengine/tar.gz/2.3.2
     tar zxf 2.3.2
-    wget https://codeload.github.com/openresty/luajit2/tar.gz/v2.1-20190912
-    tar zxf v2.1-20190912
-    wget https://codeload.github.com/simplresty/ngx_devel_kit/tar.gz/v0.3.1
-    tar zxf v0.3.1
 
-    rm -rf openresty-$OPENRESTY_VERSION/bundle/nginx-1.15.8
+    rm -rf openresty-$OPENRESTY_VERSION/bundle/nginx-1.17.8
     mv tengine-2.3.2 openresty-$OPENRESTY_VERSION/bundle/
 
-    rm -rf openresty-$OPENRESTY_VERSION/bundle/LuaJIT-2.1-20190507
-    mv luajit2-2.1-20190912 openresty-$OPENRESTY_VERSION/bundle/
-
-    rm -rf openresty-$OPENRESTY_VERSION/bundle/ngx_devel_kit-0.3.1rc1
-    mv ngx_devel_kit-0.3.1 openresty-$OPENRESTY_VERSION/bundle/
-
-    sed -i "s/= auto_complete 'LuaJIT';/= auto_complete 'luajit2';/g" openresty-$OPENRESTY_VERSION/configure
     sed -i 's/= auto_complete "nginx";/= auto_complete "tengine";/g' openresty-$OPENRESTY_VERSION/configure
 
     cd openresty-$OPENRESTY_VERSION
@@ -118,6 +91,11 @@ tengine_install() {
     wget -P patches https://raw.githubusercontent.com/totemofwolf/tengine/feature/patches/tengine-2.3.2-delete_unused_variable.patch
     wget -P patches https://raw.githubusercontent.com/totemofwolf/tengine/feature/patches/tengine-2.3.2-keepalive_post_request_status.patch
     wget -P patches https://raw.githubusercontent.com/totemofwolf/tengine/feature/patches/tengine-2.3.2-tolerate_backslash_zero_in_uri.patch
+    wget -P patches https://raw.githubusercontent.com/totemofwolf/tengine/feature/patches/tengine-2.3.2-avoid-limit_req_zone-directive-in-multiple-variables.patch
+    wget -P patches https://raw.githubusercontent.com/totemofwolf/tengine/feature/patches/tengine-2.3.2-segmentation-fault-in-master-process.patch
+    wget -P patches https://raw.githubusercontent.com/totemofwolf/tengine/feature/patches/tengine-2.3.2-support-dtls-offload.patch
+    wget -P patches https://raw.githubusercontent.com/totemofwolf/tengine/feature/patches/tengine-2.3.2-support-prometheus-to-upstream_check_module.patch
+    wget -P patches https://raw.githubusercontent.com/totemofwolf/tengine/feature/patches/tengine-2.3.2-vnswrr-adaptated-to-dynamic_resolve.patch
 
     cd bundle/tengine-2.3.2
     patch -p1 < ../../patches/nginx-1.17.4-always_enable_cc_feature_tests.patch
@@ -148,6 +126,11 @@ tengine_install() {
     patch -p1 < ../../patches/tengine-2.3.2-delete_unused_variable.patch
     patch -p1 < ../../patches/tengine-2.3.2-keepalive_post_request_status.patch
     patch -p1 < ../../patches/tengine-2.3.2-tolerate_backslash_zero_in_uri.patch
+    patch -p1 < ../../patches/tengine-2.3.2-avoid-limit_req_zone-directive-in-multiple-variables.patch
+    patch -p1 < ../../patches/tengine-2.3.2-segmentation-fault-in-master-process.patch
+    patch -p1 < ../../patches/tengine-2.3.2-support-dtls-offload.patch
+    patch -p1 < ../../patches/tengine-2.3.2-support-prometheus-to-upstream_check_module.patch
+    patch -p1 < ../../patches/tengine-2.3.2-vnswrr-adaptated-to-dynamic_resolve.patch
 
     cd -
     # patching end
@@ -218,23 +201,13 @@ do_install() {
 
     sudo apt-get -y update --fix-missing
     sudo apt-get -y install software-properties-common
-    sudo add-apt-repository -y ppa:longsleep/golang-backports
 
     sudo apt-get update
     sudo apt-get install lua5.1 liblua5.1-0-dev
 
     tengine_install
 
-    wget https://github.com/luarocks/luarocks/archive/v2.4.4.tar.gz
-    tar -xf v2.4.4.tar.gz
-    cd luarocks-2.4.4
-    ./configure --prefix=/usr > build.log 2>&1 || (cat build.log && exit 1)
-    make build > build.log 2>&1 || (cat build.log && exit 1)
-    sudo make install > build.log 2>&1 || (cat build.log && exit 1)
-    cd ..
-    rm -rf luarocks-2.4.4
-
-    export GO111MOUDULE=on
+    ./utils/linux-install-luarocks.sh
 
     if [ ! -f "build-cache/apisix-master-0.rockspec" ]; then
         create_lua_deps
@@ -252,6 +225,8 @@ do_install() {
 
     sudo luarocks install luacheck > build.log 2>&1 || (cat build.log && exit 1)
 
+    ./utils/linux-install-etcd-client.sh
+
     git clone https://github.com/iresty/test-nginx.git test-nginx
     make utils
 
@@ -261,7 +236,7 @@ do_install() {
     ls -l ./
 
     if [ ! -f "build-cache/grpc_server_example" ]; then
-        wget https://github.com/iresty/grpc_server_example/releases/download/20200314/grpc_server_example-amd64.tar.gz
+        wget https://github.com/iresty/grpc_server_example/releases/download/20200901/grpc_server_example-amd64.tar.gz
         tar -xvf grpc_server_example-amd64.tar.gz
         mv grpc_server_example build-cache/
     fi
@@ -269,13 +244,8 @@ do_install() {
 
 script() {
     export_or_prefix
-    export PATH=$OPENRESTY_PREFIX/nginx/sbin:$OPENRESTY_PREFIX/luajit/bin:$OPENRESTY_PREFIX/bin:$PATH
     openresty -V
-    sudo service etcd stop
-    mkdir -p ~/etcd-data
-    /usr/bin/etcd --listen-client-urls 'http://0.0.0.0:2379' --advertise-client-urls='http://0.0.0.0:2379' --data-dir ~/etcd-data > /dev/null 2>&1 &
-    etcd --version
-    sleep 5
+
 
     ./build-cache/grpc_server_example &
 
@@ -288,7 +258,7 @@ script() {
     ./bin/apisix stop
     sleep 1
     make lint && make license-check || exit 1
-    APISIX_ENABLE_LUACOV=1 PERL5LIB=.:$PERL5LIB prove -Itest-nginx/lib -r t
+    # APISIX_ENABLE_LUACOV=1 PERL5LIB=.:$PERL5LIB prove -Itest-nginx/lib -r t
 }
 
 after_success() {

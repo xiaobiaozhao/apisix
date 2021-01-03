@@ -21,12 +21,14 @@ local ipairs = ipairs
 local table = table
 local now = ngx.now
 local type = type
-local Batch_Processor = {}
-local Batch_Processor_mt = {
-    __index = Batch_Processor
+local batch_processor = {}
+local batch_processor_mt = {
+    __index = batch_processor
 }
 local execute_func
 local create_buffer_timer
+local batch_metrics
+local prometheus = require("apisix.plugins.prometheus.exporter")
 
 
 local schema = {
@@ -109,17 +111,17 @@ function create_buffer_timer(self)
 end
 
 
-function Batch_Processor:new(func, config)
+function batch_processor:new(func, config)
     local ok, err = core.schema.check(schema, config)
     if not ok then
-        return err
+        return nil, err
     end
 
     if not(type(func) == "function") then
         return nil, "Invalid argument, arg #1 must be a function"
     end
 
-    local batch_processor = {
+    local processor = {
         func = func,
         buffer_duration = config.buffer_duration,
         inactive_timeout = config.inactive_timeout,
@@ -131,14 +133,16 @@ function Batch_Processor:new(func, config)
         entry_buffer = { entries = {}, retry_count = 0},
         is_timer_running = false,
         first_entry_t = 0,
-        last_entry_t = 0
+        last_entry_t = 0,
+        route_id = config.route_id,
+        server_addr = config.server_addr,
     }
 
-    return setmetatable(batch_processor, Batch_Processor_mt)
+    return setmetatable(processor, batch_processor_mt)
 end
 
 
-function Batch_Processor:push(entry)
+function batch_processor:push(entry)
     -- if the batch size is one then immediately send for processing
     if self.batch_max_size == 1 then
         local batch = { entries = { entry }, retry_count = 0 }
@@ -146,8 +150,20 @@ function Batch_Processor:push(entry)
         return
     end
 
+    if not batch_metrics and prometheus.get_prometheus() and self.name
+       and self.route_id and self.server_addr then
+        batch_metrics = prometheus.get_prometheus():gauge("batch_process_entries",
+                                                          "batch process remaining entries",
+                                                          {"name", "route_id", "server_addr"})
+    end
+
     local entries = self.entry_buffer.entries
     table.insert(entries, entry)
+    -- add batch metric for every route
+    if batch_metrics  then
+        self.label = {self.name, self.route_id, self.server_addr}
+        batch_metrics:set(#entries, self.label)
+    end
 
     if #entries == 1 then
         self.first_entry_t = now()
@@ -166,20 +182,25 @@ function Batch_Processor:push(entry)
 end
 
 
-function Batch_Processor:process_buffer()
+function batch_processor:process_buffer()
     -- If entries are present in the buffer move the entries to processing
     if #self.entry_buffer.entries > 0 then
-        core.log.debug("tranferring buffer entries to processing pipe line, ",
+        core.log.debug("transferring buffer entries to processing pipe line, ",
             "buffercount[", #self.entry_buffer.entries ,"]")
         self.batch_to_process[#self.batch_to_process + 1] = self.entry_buffer
         self.entry_buffer = { entries = {}, retry_count = 0 }
+        if batch_metrics then
+            self.label = {self.name, self.route_id, self.server_addr}
+            batch_metrics:set(0, self.label)
+        end
     end
 
     for _, batch in ipairs(self.batch_to_process) do
         schedule_func_exec(self, 0, batch)
     end
+
     self.batch_to_process = {}
 end
 
 
-return Batch_Processor
+return batch_processor

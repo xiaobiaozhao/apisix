@@ -53,9 +53,17 @@ proxy_temp
 fastcgi_temp
 client_body_temp
 utils/lj-releng
+default.etcd/
 .idea/
 *.iml
 \.*
-
-# .travis
-!.travis/*.sh
+!.github/
+!.travis/
+!.gitmodules
+!.markdownlint.yml
+!.yamllint
+/conf/apisix.yaml
+/conf/apisix-*.yaml
+/conf/config-*.yaml
+!/conf/config-default.yaml
+/conf/debug-*.yaml
