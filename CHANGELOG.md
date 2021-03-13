@@ -1,3 +1,7 @@
+---
+title: Changelog
+---
+
 <!--
 #
 # Licensed to the Apache Software Foundation (ASF) under one or more
@@ -17,8 +21,11 @@
 #
 -->
 
-# Table of Contents
+## Table of Contents
 
+- [2.4.0](#240)
+- [2.3.0](#230)
+- [2.2.0](#220)
 - [2.1.0](#210)
 - [2.0.0](#200)
 - [1.5.0](#150)
@@ -33,6 +40,113 @@
 - [0.7.0](#070)
 - [0.6.0](#060)
 
+## 2.4.0
+
+### Change
+
+- change: global rules should not be executed on the internal api by default [#3396](https://github.com/apache/apisix/pull/3396)
+- change: default to cache DNS record according to the TTL [#3530](https://github.com/apache/apisix/pull/3530)
+
+### Core
+
+- :sunrise: feat: support SRV record [#3686](https://github.com/apache/apisix/pull/3686)
+- :sunrise: feat: add dns discovery [#3629](https://github.com/apache/apisix/pull/3629)
+- :sunrise: feat: add consul kv discovery module [#3615](https://github.com/apache/apisix/pull/3615)
+- :sunrise: feat: support to bind plugin config by `plugin_config_id` [#3567](https://github.com/apache/apisix/pull/3567)
+- :sunrise: feat: support listen http2 with plaintext [#3547](https://github.com/apache/apisix/pull/3547)
+- :sunrise: feat: support DNS AAAA record [#3484](https://github.com/apache/apisix/pull/3484)
+
+### Plugin
+
+- :sunrise: feat: the traffic-split plugin supports upstream_id [#3512](https://github.com/apache/apisix/pull/3512)
+- :sunrise: feat(zipkin): support b3 req header [#3551](https://github.com/apache/apisix/pull/3551)
+
+### Bugfix
+
+- fix(chash): ensure retry can try every node [#3651](https://github.com/apache/apisix/pull/3651)
+- fix: script does not work when the route is bound to a service [#3678](https://github.com/apache/apisix/pull/3678)
+- fix: use openssl111 in openresty dir in precedence [#3603](https://github.com/apache/apisix/pull/3603)
+- fix(zipkin): don't cache the per-req sample ratio [#3522](https://github.com/apache/apisix/pull/3522)
+
+For more changes, please refer to [Milestone](https://github.com/apache/apisix/milestone/13)
+
+## 2.3.0
+
+### Change
+
+- fix: use luajit by default when run apisix [#3335](https://github.com/apache/apisix/pull/3335)
+- feat: use luasocket instead of curl in etcd.lua [#2965](https://github.com/apache/apisix/pull/2965)
+
+### Core
+
+- :sunrise: feat: support to communicate with etcd by TLS without verification in command line [#3415](https://github.com/apache/apisix/pull/3415)
+- :sunrise: feat: chaos test on route could still works when etcd is down [#3404](https://github.com/apache/apisix/pull/3404)
+- :sunrise: feat: ewma use p2c to improve performance [#3300](https://github.com/apache/apisix/pull/3300)
+- :sunrise: feat: support specifying https in upstream to talk with https backend [#3430](https://github.com/apache/apisix/pull/3430)
+- :sunrise: feat: allow customizing lua_package_path & lua_package_cpath [#3417](https://github.com/apache/apisix/pull/3417)
+- :sunrise: feat: allow to pass SNI in HTTPS proxy [#3420](https://github.com/apache/apisix/pull/3420)
+- :sunrise: feat: support gRPCS [#3411](https://github.com/apache/apisix/pull/3411)
+- :sunrise: feat: allow getting upstream health check status via control API [#3345](https://github.com/apache/apisix/pull/3345)
+- :sunrise: feat: support dubbo [#3224](https://github.com/apache/apisix/pull/3224)
+- :sunrise: feat: load balance by least connections [#3304](https://github.com/apache/apisix/pull/3304)
+
+### Plugin
+
+- :sunrise: feat: kafka-logger implemented reuse kafka producer [#3429](https://github.com/apache/apisix/pull/3429)
+- :sunrise: feat(authz-keycloak): dynamic scope and resource mapping. [#3308](https://github.com/apache/apisix/pull/3308)
+- :sunrise: feat: proxy-rewrite host support host with port [#3428](https://github.com/apache/apisix/pull/3428)
+- :sunrise: feat(fault-injection): support conditional fault injection using nginx variables [#3363](https://github.com/apache/apisix/pull/3363)
+
+### Bugfix
+
+- fix(standalone): require consumer's id to be the same as username [#3394](https://github.com/apache/apisix/pull/3394)
+- fix: support upstream_id & consumer with grpc [#3387](https://github.com/apache/apisix/pull/3387)
+- fix: set conf info when global rule is hit without matched rule [#3332](https://github.com/apache/apisix/pull/3332)
+- fix: avoid caching outdated discovery upstream nodes [#3295](https://github.com/apache/apisix/pull/3295)
+- fix: create the health checker in `access` phase [#3240](https://github.com/apache/apisix/pull/3240)
+- fix: make set_more_retries() work when upstream_type is chash [#2676](https://github.com/apache/apisix/pull/2676)
+
+For more changes, please refer to [Milestone](https://github.com/apache/apisix/milestone/12)
+
+## 2.2.0
+
+### Change
+
+- disable node-status plugin by default [#2968](https://github.com/apache/apisix/pull/2968)
+- k8s_deployment_info is no longer allowed in upstream [#3098](https://github.com/apache/apisix/pull/3098)
+- don't treat route segment with ':' as parameter by default [#3154](https://github.com/apache/apisix/pull/3154)
+
+### Core
+
+- :sunrise: allow create consumers with multiple auth plugins [#2898](https://github.com/apache/apisix/pull/2898)
+- :sunrise: increase the delay before resync etcd [#2977](https://github.com/apache/apisix/pull/2977)
+- :sunrise: support enable/disable route [#2943](https://github.com/apache/apisix/pull/2943)
+- :sunrise: route according to the graphql attributes [#2964](https://github.com/apache/apisix/pull/2964)
+- :sunrise: share etcd auth token [#2932](https://github.com/apache/apisix/pull/2932)
+- :sunrise: add control API [#3048](https://github.com/apache/apisix/pull/3048)
+
+### Plugin
+
+- :sunrise: feat(limt-count): use 'remote_addr' as default key [#2927](https://github.com/apache/apisix/pull/2927)
+- :sunrise: feat(fault-injection): support Nginx variable in abort.body [#2986](https://github.com/apache/apisix/pull/2986)
+- :sunrise: feat: implement new plugin `server-info` [#2926](https://github.com/apache/apisix/pull/2926)
+- :sunrise: feat: add batch process metrics [#3070](https://github.com/apache/apisix/pull/3070)
+- :sunrise: feat: Implement traffic splitting plugin [#2935](https://github.com/apache/apisix/pull/2935)
+- :sunrise: feat:  the proxy-rewrite plugin  support pass nginx variable within header [#3144](https://github.com/apache/apisix/pull/3144)
+- :sunrise: feat: Make headers to add to request in openid-connect plugin configurable [#2903](https://github.com/apache/apisix/pull/2903)
+- :sunrise: feat: support var in upstream_uri on proxy-rewrite plugin [#3139](https://github.com/apache/apisix/pull/3139)
+
+### Bugfix
+
+- basic-auth plugin should run in rewrite phases. [#2905](https://github.com/apache/apisix/pull/2905)
+- fixed the non effective config update in http/udp-logger [#2901](https://github.com/apache/apisix/pull/2901)
+- always necessary to save the data of the limit concurrency, and release the statistical status in the log phase [#2465](https://github.com/apache/apisix/pull/2465)
+- avoid duplicate auto-generated id [#3003](https://github.com/apache/apisix/pull/3003)
+- fix: ctx being contaminated due to a new feature of openresty 1.19. **For openresty 1.19 users, it is recommended to upgrade the APISIX version as soon as possible.** [#3105](https://github.com/apache/apisix/pull/3105)
+- fix: correct the validation of route.vars [#3124](https://github.com/apache/apisix/pull/3124)
+
+For more changes, please refer to [Milestone](https://github.com/apache/apisix/milestone/10)
+
 ## 2.1.0
 
 ### Core
@@ -45,20 +159,20 @@
 - Added `X-APISIX-Upstream-Status` header to distinguish 5xx errors from upstream or APISIX itself. [#2817](https://github.com/apache/apisix/pull/2817)
 - support Nginx configuration snippet. [#2803](https://github.com/apache/apisix/pull/2803)
 
-## Plugin
+### Plugin
 
 - :sunrise: **Upgrade protocol to support Apache Skywalking 8.0**[#2389](https://github.com/apache/apisix/pull/2389). So this version only supports skywalking 8.0 protocol. This plugin is disabled by default, you need to modify config.yaml to enable, which is not backward compatible.
 - :sunrise: add aliyun sls logging plugin.[#2169](https://github.com/apache/apisix/issues/2169)
 - proxy-cache: the cache_zone field in the schema should be optional.[#2776](https://github.com/apache/apisix/pull/2776)
 - fix: validate plugin configuration in the DP [#2856](https://github.com/apache/apisix/pull/2856)
 
-## Bugfix
+### Bugfix
 
 - :bug: fix(etcd): handle etcd compaction.[#2687](https://github.com/apache/apisix/pull/2687)
 - fix: move `conf/cert` to `t/certs` and disable ssl by default, which is not backward compatible. [#2112](https://github.com/apache/apisix/pull/2112)
 - fix: check decrypt key to prevent lua thread aborted [#2815](https://github.com/apache/apisix/pull/2815)
 
-## Not downward compatible features in future versions
+### Not downward compatible features in future versions
 
 -In the 2.3 release, the consumer will only support user names and discard the id. The consumer needs to manually clean up the id field in etcd, otherwise the schema verification will report an error during use
 -In the 2.3 release, opening websocket on upstream will no longer be supported
@@ -79,7 +193,7 @@ This is release candidate.
 - support multiple ports for http and https listen.[#2409](https://github.com/apache/apisix/pull/2409)
 - implement `core.sleep`.[#2397](https://github.com/apache/apisix/pull/2397)
 
-## Plugin
+### Plugin
 
 - :sunrise: **add AK/SK(HMAC) auth plugin.**[#2192](https://github.com/apache/apisix/pull/2192)
 - :sunrise: add referer-restriction plugin.[#2352](https://github.com/apache/apisix/pull/2352)
@@ -87,7 +201,7 @@ This is release candidate.
 - feat(proxy-cache): store the temporary file under cache directory. [#2317](https://github.com/apache/apisix/pull/2317)
 - feat(http-logger): support for specified the log formats via admin API [#2309](https://github.com/apache/apisix/pull/2309)
 
-## Bugfix
+### Bugfix
 
 - :bug: **`high priority`** When the data plane receives an instruction to delete a resource(router or upstream etc.), it does not properly clean up the cache, resulting in the existing resources cannot be found. This problem only occurs in the case of long and frequent deletion operations.[#2168](https://github.com/apache/apisix/pull/2168)
 - fix routing priority does not take effect.[#2447](https://github.com/apache/apisix/pull/2447)
@@ -97,7 +211,7 @@ This is release candidate.
 
 For more changes, please refer to [Milestone](https://github.com/apache/apisix/milestone/7)
 
-## CVE
+### CVE
 
 - Fixed Admin API default access token vulnerability
 
@@ -318,9 +432,9 @@ an advanced debugging mode that is more developer friendly, and a new URI redire
 
 ### Plugins
 
-- [Redirect URI](https://github.com/apache/incubator-apisix/blob/master/doc/plugins/redirect.md): Redirect URI plugin. [#732](https://github.com/apache/incubator-apisix/pull/732)
-- [Proxy Rewrite](https://github.com/apache/incubator-apisix/blob/master/doc/plugins/proxy-rewrite.md): Supported remove `header` feature. [#658](https://github.com/apache/incubator-apisix/pull/658)
-- [Limit Count](https://github.com/apache/incubator-apisix/blob/master/doc/plugins/limit-count.md): Supported global limit count with `Redis Server`.[#624](https://github.com/apache/incubator-apisix/pull/624)
+- [Redirect URI](https://github.com/apache/incubator-apisix/blob/master/docs/en/latest/plugins/redirect.md): Redirect URI plugin. [#732](https://github.com/apache/incubator-apisix/pull/732)
+- [Proxy Rewrite](https://github.com/apache/incubator-apisix/blob/master/docs/en/latest/plugins/proxy-rewrite.md): Supported remove `header` feature. [#658](https://github.com/apache/incubator-apisix/pull/658)
+- [Limit Count](https://github.com/apache/incubator-apisix/blob/master/docs/en/latest/plugins/limit-count.md): Supported global limit count with `Redis Server`.[#624](https://github.com/apache/incubator-apisix/pull/624)
 
 ### lua-resty-*
 
@@ -352,16 +466,16 @@ and support for ARM platform, and proxy rewrite plugin.
 
 ### Core
 
-- :sunrise: **[support stand-alone mode](https://github.com/apache/incubator-apisix/blob/master/doc/stand-alone-cn.md)**: using yaml to update configurations of APISIX, more friendly to kubernetes. [#464](https://github.com/apache/incubator-apisix/pull/464)
-- :sunrise: **[support stream proxy](https://github.com/apache/incubator-apisix/blob/master/doc/stream-proxy.md)**. [#513](https://github.com/apache/incubator-apisix/pull/513)
+- :sunrise: **[support stand-alone mode](https://github.com/apache/incubator-apisix/blob/master/docs/en/latest/stand-alone-cn.md)**: using yaml to update configurations of APISIX, more friendly to kubernetes. [#464](https://github.com/apache/incubator-apisix/pull/464)
+- :sunrise: **[support stream proxy](https://github.com/apache/incubator-apisix/blob/master/docs/en/latest/stream-proxy.md)**. [#513](https://github.com/apache/incubator-apisix/pull/513)
 - :sunrise: support consumer bind plugins. [#544](https://github.com/apache/incubator-apisix/pull/544)
 - support domain name in upstream, not only IP. [#522](https://github.com/apache/incubator-apisix/pull/522)
 - ignored upstream node when it's weight is 0. [#536](https://github.com/apache/incubator-apisix/pull/536)
 
 ### Plugins
 
-- :sunrise: **[MQTT Proxy](https://github.com/apache/incubator-apisix/blob/master/doc/plugins/mqtt-proxy.md)**: support to load balance MQTT by `client_id`, both support MQTT 3.1 and 5.0. [#513](https://github.com/apache/incubator-apisix/pull/513)
-- [proxy-rewrite](https://github.com/apache/incubator-apisix/blob/master/doc/plugins/proxy-rewrite.md): rewrite uri,
+- :sunrise: **[MQTT Proxy](https://github.com/apache/incubator-apisix/blob/master/docs/en/latest/plugins/mqtt-proxy.md)**: support to load balance MQTT by `client_id`, both support MQTT 3.1 and 5.0. [#513](https://github.com/apache/incubator-apisix/pull/513)
+- [proxy-rewrite](https://github.com/apache/incubator-apisix/blob/master/docs/en/latest/plugins/proxy-rewrite.md): rewrite uri,
  schema, host for upstream. [#594](https://github.com/apache/incubator-apisix/pull/594)
 
 ### ARM
@@ -394,18 +508,18 @@ This release brings many new features, such as IP black and white list, gPRC pro
 
 ### Core
 
-- :sunrise: **[gRPC transcoding](https://github.com/apache/incubator-apisix/blob/master/doc/plugins/grpc-transcoding.md)**: supports protocol transcoding so that clients can access your gRPC API by using HTTP/JSON. [#395](https://github.com/apache/incubator-apisix/issues/395)
-- :sunrise: **[radix tree router](https://github.com/apache/incubator-apisix/blob/master/doc/router-radixtree.md)**: The radix tree is used as the default router implementation. It supports the uri, host, cookie, request header, request parameters, Nginx built-in variables, etc. as the routing conditions, and supports common operators such as equal, greater than, less than, etc., more powerful and flexible.**IMPORTANT: This change is not downward compatible. All users who use historical versions need to manually modify their routing to work properly.** [#414](https://github.com/apache/incubator-apisix/issues/414)
+- :sunrise: **[gRPC transcoding](https://github.com/apache/incubator-apisix/blob/master/docs/en/latest/plugins/grpc-transcoding.md)**: supports protocol transcoding so that clients can access your gRPC API by using HTTP/JSON. [#395](https://github.com/apache/incubator-apisix/issues/395)
+- :sunrise: **[radix tree router](https://github.com/apache/incubator-apisix/blob/master/docs/en/latest/router-radixtree.md)**: The radix tree is used as the default router implementation. It supports the uri, host, cookie, request header, request parameters, Nginx built-in variables, etc. as the routing conditions, and supports common operators such as equal, greater than, less than, etc., more powerful and flexible.**IMPORTANT: This change is not downward compatible. All users who use historical versions need to manually modify their routing to work properly.** [#414](https://github.com/apache/incubator-apisix/issues/414)
 - Dynamic upstream supports more parameters, you can specify the upstream uri and host, and whether to enable websocket. [#451](https://github.com/apache/incubator-apisix/pull/451)
 - Support for get values from cookies directly from `ctx.var`. [#449](https://github.com/apache/incubator-apisix/pull/449)
 - Routing support IPv6. [#331](https://github.com/apache/incubator-apisix/issues/331)
 
 ### Plugins
 
-- :sunrise: **[serverless](https://github.com/apache/incubator-apisix/blob/master/doc/plugins/serverless.md)**: With serverless support, users can dynamically run any Lua function on a gateway node. Users can also use this feature as a lightweight plugin.[#86](https://github.com/apache/incubator-apisix/pull/86)
+- :sunrise: **[serverless](https://github.com/apache/incubator-apisix/blob/master/docs/en/latest/plugins/serverless.md)**: With serverless support, users can dynamically run any Lua function on a gateway node. Users can also use this feature as a lightweight plugin.[#86](https://github.com/apache/incubator-apisix/pull/86)
 - :sunrise: **support IdP**: Support external authentication services, such as Auth0, okta, etc., users can use this to connect to Oauth2.0 and other authentication methods. [#447](https://github.com/apache/incubator-apisix/pull/447)
-- [rate limit](https://github.com/apache/incubator-apisix/blob/master/doc/plugins/limit-conn.md): Support for more restricted keys, such as `X-Forwarded-For` and `X-Real-IP`, and allows users to use Nginx variables, request headers, and request parameters as keys. [#228](https://github.com/apache/incubator-apisix/issues/228)
-- [IP black and white list](https://github.com/apache/incubator-apisix/blob/master/doc/plugins/ip-restriction.md) Support IP black and white list for security. [#398](https://github.com/apache/incubator-apisix/pull/398)
+- [rate limit](https://github.com/apache/incubator-apisix/blob/master/docs/en/latest/plugins/limit-conn.md): Support for more restricted keys, such as `X-Forwarded-For` and `X-Real-IP`, and allows users to use Nginx variables, request headers, and request parameters as keys. [#228](https://github.com/apache/incubator-apisix/issues/228)
+- [IP black and white list](https://github.com/apache/incubator-apisix/blob/master/docs/en/latest/plugins/ip-restriction.md) Support IP black and white list for security. [#398](https://github.com/apache/incubator-apisix/pull/398)
 
 ### CLI
 
@@ -429,7 +543,7 @@ This release brings many new features such as health check and circuit breaker, 
 
 ### Core
 
-- :sunrise: **[Health Check and Circuit Breaker](https://github.com/apache/incubator-apisix/blob/master/doc/health-check.md)**: Enable health check on the upstream node, and will automatically filter unhealthy nodes during load balancing to ensure system stability. [#249](https://github.com/apache/incubator-apisix/pull/249)
+- :sunrise: **[Health Check and Circuit Breaker](https://github.com/apache/incubator-apisix/blob/master/docs/en/latest/health-check.md)**: Enable health check on the upstream node, and will automatically filter unhealthy nodes during load balancing to ensure system stability. [#249](https://github.com/apache/incubator-apisix/pull/249)
 - Anti-ReDoS(Regular expression Denial of Service). [#252](https://github.com/apache/incubator-apisix/pull/250)
 - supported debug mode. [#319](https://github.com/apache/incubator-apisix/pull/319)
 - allowed to use different router. [#364](https://github.com/apache/incubator-apisix/pull/364)
@@ -439,8 +553,8 @@ This release brings many new features such as health check and circuit breaker, 
 
 ### Plugins
 
-- :sunrise: **[OpenTracing](https://github.com/apache/incubator-apisix/blob/master/doc/plugins/zipkin.md)**: support Zipkin and Apache SkyWalking. [#304](https://github.com/apache/incubator-apisix/pull/304)
-- [JWT auth](https://github.com/apache/incubator-apisix/blob/master/doc/plugins/jwt-auth-cn.md). [#303](https://github.com/apache/incubator-apisix/pull/303)
+- :sunrise: **[OpenTracing](https://github.com/apache/incubator-apisix/blob/master/docs/en/latest/plugins/zipkin.md)**: support Zipkin and Apache SkyWalking. [#304](https://github.com/apache/incubator-apisix/pull/304)
+- [JWT auth](https://github.com/apache/incubator-apisix/blob/master/docs/en/latest/plugins/jwt-auth-cn.md). [#303](https://github.com/apache/incubator-apisix/pull/303)
 
 ### CLI
 

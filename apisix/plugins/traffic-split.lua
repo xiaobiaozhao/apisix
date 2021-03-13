@@ -97,7 +97,7 @@ local upstreams_schema = {
     items = {
         type = "object",
         properties = {
-            upstream_id = schema_def.id_schema,    -- todo: support upstream_id method
+            upstream_id = schema_def.id_schema,
             upstream = schema_def.upstream,
             weight = {
                 description = "used to split traffic between different" ..
@@ -130,10 +130,12 @@ local schema = {
                 properties = {
                     match = match_schema,
                     weighted_upstreams = upstreams_schema
-                }
+                },
+                additionalProperties = false
             }
         }
-    }
+    },
+    additionalProperties = false
 }
 
 local plugin_name = "traffic-split"
@@ -238,14 +240,16 @@ local function set_upstream(upstream_info, ctx)
 
     local ok, err = upstream.check_schema(up_conf)
     if not ok then
+        core.log.error("failed to validate generated upstream: ", err)
         return 500, err
     end
 
     local matched_route = ctx.matched_route
+    up_conf.parent = matched_route
     local upstream_key = up_conf.type .. "#route_" ..
                          matched_route.value.id .. "_" ..upstream_info.vid
     core.log.info("upstream_key: ", upstream_key)
-    upstream.set(ctx, upstream_key, ctx.conf_version, up_conf, matched_route)
+    upstream.set(ctx, upstream_key, ctx.conf_version, up_conf)
 
     return
 end
@@ -254,18 +258,19 @@ end
 local function new_rr_obj(weighted_upstreams)
     local server_list = {}
     for i, upstream_obj in ipairs(weighted_upstreams) do
-        if not upstream_obj.upstream then
-            -- If the `upstream` object has only the `weight` value, it means
-            -- that the `upstream` weight value on the default `route` has been reached.
-            -- Need to set an identifier to mark the empty upstream.
-            upstream_obj.upstream = "empty_upstream"
-        end
-
-        if type(upstream_obj.upstream) == "table" then
-            -- Add a virtual id field to uniquely identify the upstream `key`.
+        if upstream_obj.upstream_id then
+            server_list[upstream_obj.upstream_id] = upstream_obj.weight
+        elseif upstream_obj.upstream then
+            -- Add a virtual id field to uniquely identify the upstream key.
             upstream_obj.upstream.vid = i
+            server_list[upstream_obj.upstream] = upstream_obj.weight
+        else
+            -- If the upstream object has only the weight value, it means
+            -- that the upstream weight value on the default route has been reached.
+            -- Mark empty upstream services in the plugin.
+            upstream_obj.upstream = "plugin#upstream#is#empty"
+            server_list[upstream_obj.upstream] = upstream_obj.weight
         end
-        server_list[upstream_obj.upstream] = upstream_obj.weight
     end
 
     return roundrobin:new(server_list)
@@ -287,7 +292,7 @@ function _M.access(conf, ctx)
                 return 500, err
             end
 
-            match_flag = expr:eval()
+            match_flag = expr:eval(ctx.var)
             if match_flag then
                 break
             end
@@ -311,11 +316,17 @@ function _M.access(conf, ctx)
     end
 
     local upstream = rr_up:find()
-    if upstream and upstream ~= "empty_upstream" then
+    if upstream and type(upstream) == "table" then
         core.log.info("upstream: ", core.json.encode(upstream))
         return set_upstream(upstream, ctx)
+    elseif upstream and upstream ~= "plugin#upstream#is#empty" then
+        ctx.matched_route.value.upstream_id = upstream
+        core.log.info("upstream_id: ", upstream)
+        return
     end
 
+    core.log.info("route_up: ", upstream)
+    ctx.matched_route.value.upstream_id = nil
     return
 end
 

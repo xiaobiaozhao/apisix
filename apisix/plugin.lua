@@ -102,12 +102,27 @@ local function load_plugin(name, plugins_list, is_stream_plugin)
         return
     end
 
-    if plugin.schema and plugin.schema.type == "object" then
-        if not plugin.schema.properties or
-           core.table.nkeys(plugin.schema.properties) == 0
-        then
-            plugin.schema.properties = core.schema.plugin_disable_schema
+    if type(plugin.schema) ~= "table" then
+        core.log.error("invalid plugin [", name, "] schema field")
+        return
+    end
+
+    if not plugin.schema.properties then
+        plugin.schema.properties = {}
+    end
+
+    local properties = plugin.schema.properties
+    local plugin_injected_schema = core.schema.plugin_injected_schema
+
+    if plugin.schema['$comment'] ~= plugin_injected_schema['$comment'] then
+        if properties.disable then
+            core.log.error("invalid plugin [", name,
+                           "]: found forbidden 'disable' field in the schema")
+            return
         end
+
+        properties.disable = plugin_injected_schema.disable
+        plugin.schema['$comment'] = plugin_injected_schema['$comment']
     end
 
     plugin.name = name
@@ -386,11 +401,8 @@ local function merge_service_route(service_conf, route_conf)
     local route_upstream = route_conf.value.upstream
     if route_upstream then
         new_conf.value.upstream = route_upstream
-
-        if route_upstream.checks then
-            route_upstream.parent = route_conf
-        end
-
+        -- when route's upstream override service's upstream,
+        -- the upstream.parent still point to the route
         new_conf.value.upstream_id = nil
         new_conf.has_domain = route_conf.has_domain
     end
@@ -400,14 +412,18 @@ local function merge_service_route(service_conf, route_conf)
         new_conf.has_domain = route_conf.has_domain
     end
 
+    if route_conf.value.script then
+        new_conf.value.script = route_conf.value.script
+    end
+
     -- core.log.info("merged conf : ", core.json.delay_encode(new_conf))
     return new_conf
 end
 
 
 function _M.merge_service_route(service_conf, route_conf)
-    core.log.info("service conf: ", core.json.delay_encode(service_conf))
-    core.log.info("  route conf: ", core.json.delay_encode(route_conf))
+    core.log.info("service conf: ", core.json.delay_encode(service_conf, true))
+    core.log.info("  route conf: ", core.json.delay_encode(route_conf, true))
 
     local route_service_key = route_conf.value.id .. "#"
         .. route_conf.modifiedIndex .. "#" .. service_conf.modifiedIndex
@@ -478,12 +494,12 @@ end
 
 
 function _M.init_worker()
-    _M.load()
-
     -- some plugins need to be initialized in init* phases
     if ngx.config.subsystem == "http" then
         require("apisix.plugins.prometheus.exporter").init()
     end
+
+    _M.load()
 
     if local_conf and not local_conf.apisix.enable_admin then
         init_plugins_syncer()
@@ -625,6 +641,84 @@ function _M.stream_plugin_checker(item)
     end
 
     return true
+end
+
+
+function _M.run_plugin(phase, plugins, api_ctx)
+    api_ctx = api_ctx or ngx.ctx.api_ctx
+    if not api_ctx then
+        return
+    end
+
+    plugins = plugins or api_ctx.plugins
+    if not plugins or #plugins == 0 then
+        return api_ctx
+    end
+
+    if phase ~= "log"
+        and phase ~= "header_filter"
+        and phase ~= "body_filter"
+    then
+        for i = 1, #plugins, 2 do
+            local phase_func = plugins[i][phase]
+            if phase_func then
+                local code, body = phase_func(plugins[i + 1], api_ctx)
+                if code or body then
+                    if code >= 400 then
+                        core.log.warn(plugins[i].name, " exits with http status code ", code)
+                    end
+
+                    core.response.exit(code, body)
+                end
+            end
+        end
+        return api_ctx
+    end
+
+    for i = 1, #plugins, 2 do
+        local phase_func = plugins[i][phase]
+        if phase_func then
+            phase_func(plugins[i + 1], api_ctx)
+        end
+    end
+
+    return api_ctx
+end
+
+
+function _M.run_global_rules(api_ctx, global_rules, phase_name)
+    if global_rules and global_rules.values
+       and #global_rules.values > 0 then
+        local orig_conf_type = api_ctx.conf_type
+        local orig_conf_version = api_ctx.conf_version
+        local orig_conf_id = api_ctx.conf_id
+
+        if phase_name == "access" then
+            api_ctx.global_rules = global_rules
+        end
+
+        local plugins = core.tablepool.fetch("plugins", 32, 0)
+        local values = global_rules.values
+        for _, global_rule in config_util.iterate_values(values) do
+            api_ctx.conf_type = "global_rule"
+            api_ctx.conf_version = global_rule.modifiedIndex
+            api_ctx.conf_id = global_rule.value.id
+
+            core.table.clear(plugins)
+            plugins = _M.filter(global_rule, plugins)
+            if phase_name == "access" then
+                _M.run_plugin("rewrite", plugins, api_ctx)
+                _M.run_plugin("access", plugins, api_ctx)
+            else
+                _M.run_plugin(phase_name, plugins, api_ctx)
+            end
+        end
+        core.tablepool.release("plugins", plugins)
+
+        api_ctx.conf_type = orig_conf_type
+        api_ctx.conf_version = orig_conf_version
+        api_ctx.conf_id = orig_conf_id
+    end
 end
 
 

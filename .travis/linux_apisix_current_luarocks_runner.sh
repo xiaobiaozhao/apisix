@@ -19,6 +19,8 @@
 . ./.travis/common.sh
 
 do_install() {
+    export_or_prefix
+
     ./utils/linux-install-openresty.sh
     ./utils/linux-install-luarocks.sh
     ./utils/linux-install-etcd-client.sh
@@ -54,7 +56,7 @@ script() {
     cd ..
 
     # apisix cli test
-    for f in ./.travis/apisix_cli_test/test_*.sh; do
+    for f in ./t/cli/test_*.sh; do
         sudo PATH="$PATH" "$f"
     done
 }
