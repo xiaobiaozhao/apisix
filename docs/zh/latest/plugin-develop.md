@@ -38,28 +38,23 @@ title: 插件开发
 
 ## 检查外部依赖
 
-如果你的插件，涉及到一些外部的依赖和三方库，请首先检查一下依赖项的内容。 如果插件需要用到共享内存，需要在 __apisix/cli/ngx_tpl.lua__ 文
-件里面进行申明，例如：
+如果你的插件，涉及到一些外部的依赖和三方库，请首先检查一下依赖项的内容。 如果插件需要用到共享内存，需要在[自定义 Nginx 配置](./customize-nginx-configuration.md)，例如：
 
-```nginx
-    lua_shared_dict plugin-limit-req     10m;
-    lua_shared_dict plugin-limit-count   10m;
-    lua_shared_dict prometheus-metrics   10m;
-    lua_shared_dict plugin-limit-conn    10m;
-    lua_shared_dict upstream-healthcheck 10m;
-    lua_shared_dict worker-events        10m;
-
-    # for openid-connect plugin
-    lua_shared_dict discovery             1m; # cache for discovery metadata documents
-    lua_shared_dict jwks                  1m; # cache for JWKs
-    lua_shared_dict introspection        10m; # cache for JWT verification results
+```yaml
+# put this in config.yaml:
+nginx_config:
+    http_configuration_snippet: |
+        # for openid-connect plugin
+        lua_shared_dict discovery             1m; # cache for discovery metadata documents
+        lua_shared_dict jwks                  1m; # cache for JWKs
+        lua_shared_dict introspection        10m; # cache for JWT verification results
 ```
 
 插件本身提供了 init 方法。方便插件加载后做初始化动作。
 
 注：如果部分插件的功能实现，需要在 Nginx 初始化启动，则可能需要在 __apisix/init.lua__ 文件的初始化方法 http_init 中添加逻辑，并且
 可能需要在 __apisix/cli/ngx_tpl.lua__ 文件中，对 Nginx 配置文件生成的部分，添加一些你需要的处理。但是这样容易对全局产生影响，根据现有的
-插件机制，我们不建议这样做，除非你已经对代码完全掌握。
+插件机制，**我们不建议这样做，除非你已经对代码完全掌握**。
 
 ## 插件命名与配置
 
@@ -78,7 +73,7 @@ local _M = {
 }
 ```
 
-注：新插件的优先级（ priority 属性 ）不能与现有插件的优先级相同，您可以使用 [control API](../../en/latest/control-api.md#get-v1schema) 的 `/v1/schema` 方法查看所有插件的优先级。另外，同一个阶段里面，优先级( priority )值大的插件，会优先执行，比如 `example-plugin` 的优先级是 0 ，`ip-restriction` 的优先级是 3000 ，所以在每个阶段，会先执行 `ip-restriction` 插件，再去执行 `example-plugin` 插件。这里的“阶段”的定义，参见后续的[确定执行阶段](#确定执行阶段)这一节。
+注：新插件的优先级（ priority 属性 ）不能与现有插件的优先级相同，您可以使用 [control API](../../en/latest/control-api.md#get-v1schema) 的 `/v1/schema` 方法查看所有插件的优先级。另外，同一个阶段里面，优先级( priority )值大的插件，会优先执行，比如 `example-plugin` 的优先级是 0 ，`ip-restriction` 的优先级是 3000 ，所以在每个阶段，会先执行 `ip-restriction` 插件，再去执行 `example-plugin` 插件。这里的“阶段”的定义，参见后续的[确定执行阶段](#确定执行阶段)这一节。对于你的插件，建议采用 1 到 99 之间的优先级。
 
 在 __conf/config-default.yaml__ 配置文件中，列出了启用的插件（都是以插件名指定的）：
 

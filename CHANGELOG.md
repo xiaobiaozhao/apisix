@@ -23,6 +23,8 @@ title: Changelog
 
 ## Table of Contents
 
+- [2.6.0](#260)
+- [2.5.0](#250)
 - [2.4.0](#240)
 - [2.3.0](#230)
 - [2.2.0](#220)
@@ -39,6 +41,78 @@ title: Changelog
 - [0.8.0](#080)
 - [0.7.0](#070)
 - [0.6.0](#060)
+
+## 2.6.0
+
+### Change
+
+- change(prometheus): redesign the latency metrics & update grafana [#3993](https://github.com/apache/apisix/pull/3993)
+- change(prometheus): don't expose metrics to internet [#3994](https://github.com/apache/apisix/pull/3994)
+- change(limit-count): ensure redis cluster name is set correctly [#3910](https://github.com/apache/apisix/pull/3910)
+- change: drop support of OpenResty 1.15 [#3960](https://github.com/apache/apisix/pull/3960)
+
+### Core
+
+- :sunrise: feat: support passing different host headers in multiple nodes [#4208](https://github.com/apache/apisix/pull/4208)
+- :sunrise: feat: add 50x html for error page [#4164](https://github.com/apache/apisix/pull/4164)
+- :sunrise: feat: support to use upstream_id in stream_route [#4121](https://github.com/apache/apisix/pull/4121)
+- :sunrise: feat: support client certificate verification [#4034](https://github.com/apache/apisix/pull/4034)
+- :sunrise: feat: add nacos support [#3820](https://github.com/apache/apisix/pull/3820)
+- :sunrise: feat: patch tcp.sock.connect to use our DNS resolver [#4114](https://github.com/apache/apisix/pull/4114)
+
+### Plugin
+
+- :sunrise: feat(redirect): support uri encoding [#4244](https://github.com/apache/apisix/pull/4244)
+- :sunrise: feat(key-auth): allow customizing header [#4013](https://github.com/apache/apisix/pull/4013)
+- :sunrise: feat(response-rewrite): allow using variable in the header [#4194](https://github.com/apache/apisix/pull/4194)
+- :sunrise: feat(ext-plugin): APISIX can support Java, Go and other languages to implement custom plugin [#4183](https://github.com/apache/apisix/pull/4183)
+
+### Bugfix
+
+- fix(DNS): support IPv6 resolver [#4242](https://github.com/apache/apisix/pull/4242)
+- fix(healthcheck): only one_loop is needed in the passive health check report [#4116](https://github.com/apache/apisix/pull/4116)
+- fix(traffic-split): configure multiple "rules", the request will be confused between upstream [#4092](https://github.com/apache/apisix/pull/4092)
+- fix: ensure upstream with domain is cached [#4061](https://github.com/apache/apisix/pull/4061)
+- fix: be compatible with the router created before 2.5 [#4056](https://github.com/apache/apisix/pull/4056)
+- fix(standalone): the conf should be available during start [#4027](https://github.com/apache/apisix/pull/4027)
+- fix: ensure atomic operation in limit-count plugin [#3991](https://github.com/apache/apisix/pull/3991)
+
+## 2.5.0
+
+**The changes marked with :warning: are not backward compatible.**
+**Please upgrade your data accordingly before upgrading to this version.**
+**[#3809](https://github.com/apache/apisix/pull/3809) Means that empty vars will make the route fail to match any requests.**
+
+### Change
+
+- :warning: change: remove unused consumer.id  [#3868](https://github.com/apache/apisix/pull/3868)
+- :warning: change: remove deprecated upstream.enable_websocket [#3854](https://github.com/apache/apisix/pull/3854)
+- change(zipkin): rearrange the child span [#3877](https://github.com/apache/apisix/pull/3877)
+
+### Core
+
+- :sunrise: feat: support mTLS with etcd [#3905](https://github.com/apache/apisix/pull/3905)
+- :warning: feat: upgrade lua-resty-expr/radixtree to support logical expression [#3809](https://github.com/apache/apisix/pull/3809)
+- :sunrise: feat: load etcd configuration when apisix starts [#3799](https://github.com/apache/apisix/pull/3799)
+- :sunrise: feat: let balancer support priority [#3755](https://github.com/apache/apisix/pull/3755)
+- :sunrise: feat: add control api for discovery module [#3742](https://github.com/apache/apisix/pull/3742)
+
+### Plugin
+
+- :sunrise: feat(skywalking):  allow destroy and configure report interval for reporter [#3925](https://github.com/apache/apisix/pull/3925)
+- :sunrise: feat(traffic-split): the upstream pass_host needs to support IP mode [#3870](https://github.com/apache/apisix/pull/3870)
+- :sunrise: feat: Add filter on HTTP methods for consumer-restriction plugin [#3691](https://github.com/apache/apisix/pull/3691)
+- :sunrise: feat: add allow_origins_by_regex to cors plugin [#3839](https://github.com/apache/apisix/pull/3839)
+- :sunrise: feat: support conditional response rewrite [#3577](https://github.com/apache/apisix/pull/3577)
+
+### Bugfix
+
+- fix(error-log-logger): the logger should be run in each process [#3912](https://github.com/apache/apisix/pull/3912)
+- fix: use the builtin server by default [#3907](https://github.com/apache/apisix/pull/3907)
+- fix(traffic-split): binding upstream via upstream_id is invalid [#3842](https://github.com/apache/apisix/pull/3842)
+- fix: correct the validation for ssl_trusted_certificate [#3832](https://github.com/apache/apisix/pull/3832)
+- fix: don't override cache relative headers [#3789](https://github.com/apache/apisix/pull/3789)
+- fix: fail to run `make deps` on macOS [#3718](https://github.com/apache/apisix/pull/3718)
 
 ## 2.4.0
 

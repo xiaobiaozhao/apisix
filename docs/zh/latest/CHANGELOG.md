@@ -23,6 +23,8 @@ title: CHANGELOG
 
 ## Table of Contents
 
+- [2.6.0](#260)
+- [2.5.0](#250)
 - [2.4.0](#240)
 - [2.3.0](#230)
 - [2.2.0](#220)
@@ -39,6 +41,71 @@ title: CHANGELOG
 - [0.8.0](#080)
 - [0.7.0](#070)
 - [0.6.0](#060)
+
+## 2.6.0
+
+### Change
+
+- 更改 prometheus 里面关于 latency 的指标的 label [#3993](https://github.com/apache/apisix/pull/3993)
+- 修改 prometheus 默认端口，不再暴露到数据面的端口上 [#3994](https://github.com/apache/apisix/pull/3994)
+- limit-count 里面如果使用 redis cluster，需要指定名称 [#3910](https://github.com/apache/apisix/pull/3910)
+- 不再支持 OpenResty 1.15 [#3960](https://github.com/apache/apisix/pull/3960)
+
+### Core
+
+- :sunrise: 允许 pass_host 为 node 时，upstream 配置多个节点 [#4208](https://github.com/apache/apisix/pull/4208)
+- :sunrise: 自定义 500 错误页 [#4164](https://github.com/apache/apisix/pull/4164)
+- :sunrise: stream_route 中支持 upstream_id [#4121](https://github.com/apache/apisix/pull/4121)
+- :sunrise: 支持客户端证书认证 [#4034](https://github.com/apache/apisix/pull/4034)
+- :sunrise: 实验性支持 nacos 服务发现 [#3820](https://github.com/apache/apisix/pull/3820)
+- :sunrise: 给 tcp.sock.connect 打补丁，采用配置的 DNS resolver [#4114](https://github.com/apache/apisix/pull/4114)
+
+### Plugin
+
+- :sunrise: redirect 插件，支持编码 uri [#4244](https://github.com/apache/apisix/pull/4244)
+- :sunrise: key-auth 插件: 支持自定义鉴权头 [#4013](https://github.com/apache/apisix/pull/4013)
+- :sunrise: response-rewrite 插件: 允许在 header 里面使用变量 [#4194](https://github.com/apache/apisix/pull/4194)
+- :sunrise: 实现 ext-plugin 第一版，APISIX 现在支持使用其他语言编写自定义插件 [#4183](https://github.com/apache/apisix/pull/4183)
+
+### Bugfix
+
+- 支持 IPv6 DNS resolver [#4242](https://github.com/apache/apisix/pull/4242)
+- 修复被动健康检查可能重复报告的问题 [#4116](https://github.com/apache/apisix/pull/4116)
+- 修复 traffic-split 中偶发的规则紊乱 [#4092](https://github.com/apache/apisix/pull/4092)
+- 修复带域名的 upstream 配置的访问问题 [#4061](https://github.com/apache/apisix/pull/4061)
+- 修复 2.5 版本的 APISIX 无法识别之前版本的 route 配置的问题 [#4056](https://github.com/apache/apisix/pull/4056)
+- standalone 模式下，启动程序时应该可以读取配置 [#4027](https://github.com/apache/apisix/pull/4027)
+- limit-count 插件 redis 模式下原子化计数操作 [#3991](https://github.com/apache/apisix/pull/3991)
+
+## 2.5.0
+
+### Change
+
+- 更改 zipkin 插件的 span 类型 [#3877](https://github.com/apache/apisix/pull/3877)
+
+### Core
+
+- :sunrise: 支持 etcd 客户端证书校验 [#3905](https://github.com/apache/apisix/pull/3905)
+- :sunrise: 支持表达式使用“或”和“非”的逻辑 [#3809](https://github.com/apache/apisix/pull/3809)
+- :sunrise: 默认启动时会同步etcd配置 [#3799](https://github.com/apache/apisix/pull/3799)
+- :sunrise: 负载均衡支持节点优先级 [#3755](https://github.com/apache/apisix/pull/3755)
+- :sunrise: 服务发现提供了一系列 control API [#3742](https://github.com/apache/apisix/pull/3742)
+
+### Plugin
+
+- :sunrise: 允许热更新 skywalking 插件配置，并允许配置上报间隔 [#3925](https://github.com/apache/apisix/pull/3925)
+- :sunrise: consumer-restriction 支持 HTTP method 级别的白名单配置 [#3691](https://github.com/apache/apisix/pull/3691)
+- :sunrise: cors 插件支持通过正则表达式匹配 Origin [#3839](https://github.com/apache/apisix/pull/3839)
+- :sunrise: response-rewrite 插件支持条件改写 [#3577](https://github.com/apache/apisix/pull/3577)
+
+### Bugfix
+
+- error-log-logger 插件需要在每个进程中上报日志 [#3912](https://github.com/apache/apisix/pull/3912)
+- 当使用 snippet 引入 Nginx server 段配置时，确保内置 server 是默认 server [#3907](https://github.com/apache/apisix/pull/3907)
+- 修复 traffic-split 插件通过 upstream_id 绑定上游的问题 [#3842](https://github.com/apache/apisix/pull/3842)
+- 修复 ssl_trusted_certificate 配置项的校验 [#3832](https://github.com/apache/apisix/pull/3832)
+- 启用 proxy-cache 时，避免覆盖到其他路由缓存相关的响应头 [#3789](https://github.com/apache/apisix/pull/3789)
+- 解决 macOS 下无法 `make deps` 的问题 [#3718](https://github.com/apache/apisix/pull/3718)
 
 ## 2.4.0
 

@@ -97,7 +97,7 @@ discovery:
       read: 1000
       wait: 60
     weight: 1
-    fetch_interval: 5
+    fetch_interval: 1
     keepalive: true
     default_service:
       host: "127.0.0.1"
@@ -315,16 +315,6 @@ location /sleep {
 --- timeout: 6
 --- request eval
 [
-    "DELETE /v1/kv/upstreams/webpages/?recurse=true",
-    "PUT /v1/kv/upstreams/webpages/127.0.0.1:30511\n" . "{\"weight\": 1, \"max_fails\": 2, \"fail_timeout\": 1}",
-    "GET /sleep?sec=5",
-    "GET /hello",
-
-    "PUT /v1/kv/upstreams/webpages/127.0.0.1:30512\n" . "{\"weight\": 1, \"max_fails\": 2, \"fail_timeout\": 1}",
-    "GET /sleep",
-    "GET /hello",
-    "GET /hello",
-
     "DELETE /v1/kv/upstreams/webpages/127.0.0.1:30511",
     "DELETE /v1/kv/upstreams/webpages/127.0.0.1:30512",
     "PUT /v1/kv/upstreams/webpages/127.0.0.1:30513\n" . "{\"weight\": 1, \"max_fails\": 2, \"fail_timeout\": 1}",
@@ -350,16 +340,6 @@ location /sleep {
 ]
 --- response_body_like eval
 [
-    qr/true/,
-    qr/true/,
-    qr/ok\n/,
-    qr/server 1\n/,
-
-    qr/true/,
-    qr/ok\n/,
-    qr/server [1-2]\n/,
-    qr/server [1-2]\n/,
-
     qr/true/,
     qr/true/,
     qr/true/,
@@ -438,7 +418,7 @@ upstreams:
             local uri = "http://127.0.0.1:" .. ngx.var.server_port .. "/hello"
             local httpc = http.new()
             httpc:request_uri(uri, {method = "GET"})
-            ngx.sleep(9)
+            ngx.sleep(3)
 
             local code, body, res = t.test('/v1/healthcheck',
                 ngx.HTTP_GET)
@@ -457,7 +437,6 @@ upstreams:
             ngx.say(json.encode(res))
         }
     }
---- timeout: 12
 --- request
 GET /thc
 --- response_body

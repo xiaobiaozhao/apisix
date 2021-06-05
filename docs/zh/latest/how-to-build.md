@@ -31,47 +31,35 @@ Apache APISIX 的运行环境需要 Nginx 和 etcd，
 
 你可以通过源码包、Docker、Luarocks 等多种方式来安装 Apache APISIX。
 
+### 通过 RPM 包安装（CentOS 7）
+
+```shell
+sudo yum install -y https://github.com/apache/apisix/releases/download/2.6/apisix-2.6-0.x86_64.rpm
+```
+
+### 通过 Docker 安装
+
+见 https://hub.docker.com/r/apache/apisix
+
+### 通过 Helm Chart 安装
+
+见 https://github.com/apache/apisix-helm-chart
+
 ### 通过源码包安装
 
 你需要先下载 Apache Release 源码包：
 
 ```shell
-$ mkdir apisix-2.4
-$ wget https://downloads.apache.org/apisix/2.4/apache-apisix-2.4-src.tgz
-$ tar zxvf apache-apisix-2.4-src.tgz -C apisix-2.4
+$ mkdir apisix-2.6
+$ wget https://downloads.apache.org/apisix/2.6/apache-apisix-2.6-src.tgz
+$ tar zxvf apache-apisix-2.6-src.tgz -C apisix-2.6
 ```
 
 安装运行时依赖的 Lua 库：
 
 ```
-cd apisix-2.4
+cd apisix-2.6
 make deps
-```
-
-### 通过 RPM 包安装（CentOS 7）
-
-```shell
-sudo yum install -y https://github.com/apache/apisix/releases/download/2.4/apisix-2.4-0.x86_64.rpm
-```
-
-### 通过 Luarocks 安装 （不支持 macOS）
-
-在终端中执行下面命令完成 APISIX 的安装（只推荐开发者使用）：
-
-> 通过脚本安装 master 分支的代码
-
-```shell
-sudo sh -c "$(curl -fsSL https://raw.githubusercontent.com/apache/apisix/master/utils/install-apisix.sh)"
-```
-
-> 通过 Luarocks 安装指定的版本:
-
-```shell
-# 安装 apisix 的 2.4 版本
-sudo luarocks install --lua-dir=/path/openresty/luajit apisix 2.4
-
-# 老版本 luarocks 可能不支持 `lua-dir` 参数，可以删除该选项
-sudo luarocks install apisix 2.4
 ```
 
 ## 3. 管理（启动、关闭等）APISIX 服务
@@ -116,6 +104,7 @@ Makefile rules:
     * 追加当前目录到perl模块目录： `export PERL5LIB=.:$PERL5LIB`
     * 直接运行：`make test`
     * 指定 nginx 二进制路径：`TEST_NGINX_BINARY=/usr/local/bin/openresty prove -Itest-nginx/lib -r t`
+    * 部分测试需要依赖外部服务和修改系统配置。如果想要完整地构建测试环境，可以参考 `ci/linux_openresty_common_runner.sh`。
 
 ### 疑难排解测试
 
@@ -172,3 +161,15 @@ Content-Type: text/html
 有些功能需要你引入额外的 Nginx 模块到 OpenResty 当中。
 如果你需要这些功能，你可以用[这个脚本](https://raw.githubusercontent.com/api7/apisix-build-tools/master/build-apisix-openresty.sh)
 构建 OpenResty。
+
+## 7. 为 APISIX 添加 systemd 配置文件
+
+如果通过 rpm 包安装 APISIX，配置文件已经自动安装到位，你可以直接运行
+
+```
+$ systemctl start apisix
+$ systemctl stop apisix
+$ systemctl enable apisix
+```
+
+如果通过其他方法安装，可以参考[配置文件模板](https://github.com/api7/apisix-build-tools/blob/master/usr/lib/systemd/system/apisix.service)进行修改，并将其放置在 `/usr/lib/systemd/system/apisix.service`。

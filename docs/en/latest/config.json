@@ -1,6 +1,11 @@
 {
-  "version": 2.4,
+  "version": 2.6,
   "sidebar": [
+    {
+      "type": "link",
+      "label": "Apache APISIX",
+      "href" : "https://apisix.apache.org/docs/apisix/getting-started"
+    },
     {
       "type": "category",
       "label": "Architecture Design",
@@ -38,7 +43,9 @@
             "plugins/serverless",
             "plugins/redirect",
             "plugins/echo",
-            "plugins/server-info"
+            "plugins/server-info",
+            "plugins/ext-plugin-pre-req",
+            "plugins/ext-plugin-post-req"
           ]
         },
         {
@@ -147,6 +154,17 @@
       "label": "Others",
       "items": [
         {
+          "type": "category",
+          "label": "Discovery",
+          "items": [
+            "discovery",
+            "discovery/dns",
+            "discovery/consul_kv",
+            "discovery/nacos",
+            "discovery/eureka"
+          ]
+        },
+        {
           "type": "doc",
           "id": "health-check"
         },
@@ -176,7 +194,27 @@
         },
         {
           "type": "doc",
+          "id": "batch-processor"
+        },
+        {
+          "type": "doc",
           "id": "benchmark"
+        },
+        {
+          "type": "doc",
+          "id": "install-dependencies"
+        },
+        {
+          "type": "doc",
+          "id": "plugin-develop"
+        },
+        {
+          "type": "doc",
+          "id": "external-plugin"
+        },
+        {
+          "type": "doc",
+          "id": "plugin-interceptors"
         },
         {
           "type": "link",

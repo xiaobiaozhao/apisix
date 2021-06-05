@@ -37,6 +37,9 @@ title: Plugin Develop
   - [Register public API](#register-public-api)
   - [Register control API](#register-control-api)
 
+This documentation is about developing plugin in Lua. For other languages,
+see [external plugin](./external-plugin.md).
+
 ## where to put your plugins
 
 There are two ways to add new features based on APISIX.
@@ -69,20 +72,16 @@ Now using `require "apisix.plugins.3rd-party"` will load your plugin, just like 
 ## check dependencies
 
 if you have dependencies on external libraries, check the dependent items. if your plugin needs to use shared memory, it
-needs to declare in **apisix/cli/ngx_tpl.lua**, for example :
+needs to declare via [customizing Nginx configuration](./customize-nginx-configuration.md), for example :
 
-```nginx
-    lua_shared_dict plugin-limit-req     10m;
-    lua_shared_dict plugin-limit-count   10m;
-    lua_shared_dict prometheus-metrics   10m;
-    lua_shared_dict plugin-limit-conn    10m;
-    lua_shared_dict upstream-healthcheck 10m;
-    lua_shared_dict worker-events        10m;
-
-    # for openid-connect plugin
-    lua_shared_dict discovery             1m; # cache for discovery metadata documents
-    lua_shared_dict jwks                  1m; # cache for JWKs
-    lua_shared_dict introspection        10m; # cache for JWT verification results
+```yaml
+# put this in config.yaml:
+nginx_config:
+    http_configuration_snippet: |
+        # for openid-connect plugin
+        lua_shared_dict discovery             1m; # cache for discovery metadata documents
+        lua_shared_dict jwks                  1m; # cache for JWKs
+        lua_shared_dict introspection        10m; # cache for JWT verification results
 ```
 
 The plugin itself provides the init method. It is convenient for plugins to perform some initialization after
@@ -91,7 +90,7 @@ the plugin is loaded.
 Note : if the dependency of some plugin needs to be initialized when Nginx start, you may need to add logic to the initialization
 method "http_init" in the file __apisix/init.lua__, and you may need to add some processing on generated part of Nginx
 configuration file in __apisix/cli/ngx_tpl.lua__ file. But it is easy to have an impact on the overall situation according to the
-existing plugin mechanism, we do not recommend this unless you have a complete grasp of the code.
+existing plugin mechanism, **we do not recommend this unless you have a complete grasp of the code**.
 
 ## name and config
 
@@ -111,7 +110,7 @@ local _M = {
 }
 ```
 
-Note : The priority of the new plugin cannot be same to any existing ones, you can use the `/v1/schema` method of [control API](./control-api.md#get-v1schema) to view the priority of all plugins. In addition, plugins with higher priority value will be executed first in a given phase (see the definition of `phase` in [choose-phase-to-run](#choose-phase-to-run)). For example, the priority of example-plugin is 0 and the priority of ip-restriction is 3000. Therefore, the ip-restriction plugin will be executed first, then the example-plugin plugin.
+Note : The priority of the new plugin cannot be same to any existing ones, you can use the `/v1/schema` method of [control API](./control-api.md#get-v1schema) to view the priority of all plugins. In addition, plugins with higher priority value will be executed first in a given phase (see the definition of `phase` in [choose-phase-to-run](#choose-phase-to-run)). For example, the priority of example-plugin is 0 and the priority of ip-restriction is 3000. Therefore, the ip-restriction plugin will be executed first, then the example-plugin plugin. It's recommended to use priority 1 ~ 99 for your plugin unless you want it to run before some builtin plugins.
 
 in the "__conf/config-default.yaml__" configuration file, the enabled plugins (all specified by plugin name) are listed.
 
@@ -143,9 +142,7 @@ To enable your plugin, copy this plugin list into `conf/config.yaml`, and add yo
 apisix:
   admin_key:
     - name: "admin"
-      # yamllint disable rule:comments-indentation
       key: edd1c9f034335f136f87ad84b625c8f1 # using fixed API token has security risk, please update it when you deploy to production environment
-      # yamllint enable rule:comments-indentation
       role: admin
 
 plugins: # copied from config-default.yaml

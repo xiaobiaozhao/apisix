@@ -47,6 +47,7 @@ worker_rlimit_core  {* worker_rlimit_core *};
 worker_shutdown_timeout {* worker_shutdown_timeout *};
 
 env APISIX_PROFILE;
+env PATH; # for searching external plugin runner's binary
 
 {% if envs then %}
 {% for _, name in ipairs(envs) do %}
@@ -84,7 +85,11 @@ stream {
     init_by_lua_block {
         require "resty.core"
         apisix = require("apisix")
-        apisix.stream_init()
+        local dns_resolver = { {% for _, dns_addr in ipairs(dns_resolver or {}) do %} "{*dns_addr*}", {% end %} }
+        local args = {
+            dns_resolver = dns_resolver,
+        }
+        apisix.stream_init(args)
     }
 
     init_worker_by_lua_block {
@@ -92,11 +97,11 @@ stream {
     }
 
     server {
-        {% for _, port in ipairs(stream_proxy.tcp or {}) do %}
-        listen {*port*} {% if enable_reuseport then %} reuseport {% end %} {% if proxy_protocol and proxy_protocol.enable_tcp_pp then %} proxy_protocol {% end %};
+        {% for _, addr in ipairs(stream_proxy.tcp or {}) do %}
+        listen {*addr*} {% if enable_reuseport then %} reuseport {% end %} {% if proxy_protocol and proxy_protocol.enable_tcp_pp then %} proxy_protocol {% end %};
         {% end %}
-        {% for _, port in ipairs(stream_proxy.udp or {}) do %}
-        listen {*port*} udp {% if enable_reuseport then %} reuseport {% end %};
+        {% for _, addr in ipairs(stream_proxy.udp or {}) do %}
+        listen {*addr*} udp {% if enable_reuseport then %} reuseport {% end %};
         {% end %}
 
         {% if proxy_protocol and proxy_protocol.enable_tcp_pp_to_upstream then %}
@@ -133,7 +138,6 @@ http {
     lua_shared_dict upstream-healthcheck 10m;
     lua_shared_dict worker-events        10m;
     lua_shared_dict lrucache-lock        10m;
-    lua_shared_dict skywalking-tracing-buffer    100m;
     lua_shared_dict balancer_ewma        10m;
     lua_shared_dict balancer_ewma_locks  10m;
     lua_shared_dict balancer_ewma_last_touched_at 10m;
@@ -209,17 +213,25 @@ http {
     client_header_timeout {* http.client_header_timeout *};
     client_body_timeout {* http.client_body_timeout *};
     send_timeout {* http.send_timeout *};
+    variables_hash_max_size {* http.variables_hash_max_size *};
 
     server_tokens off;
 
     include mime.types;
-    charset utf-8;
+    charset {* http.charset *};
+
+    # error_page
+    error_page 500 @50x.html;
 
     {% if real_ip_header then %}
     real_ip_header {* real_ip_header *};
     {% print("\nDeprecated: apisix.real_ip_header has been moved to nginx_config.http.real_ip_header. apisix.real_ip_header will be removed in the future version. Please use nginx_config.http.real_ip_header first.\n\n") %}
     {% elseif http.real_ip_header then %}
     real_ip_header {* http.real_ip_header *};
+    {% end %}
+
+    {% if http.real_ip_recursive then %}
+    real_ip_recursive {* http.real_ip_recursive *};
     {% end %}
 
     {% if real_ip_from then %}
@@ -245,7 +257,9 @@ http {
             apisix.http_balancer_phase()
         }
 
-        keepalive 320;
+        keepalive {* http.upstream.keepalive *};
+        keepalive_requests {* http.upstream.keepalive_requests *};
+        keepalive_timeout {* http.upstream.keepalive_timeout *};
     }
 
     {% if enabled_plugins["dubbo-proxy"] then %}
@@ -286,6 +300,34 @@ http {
                 apisix.http_control()
             }
         }
+
+        location @50x.html {
+            set $from_error_page 'true';
+            try_files /50x.html $uri;
+        }
+    }
+    {% end %}
+
+    {% if enabled_plugins["prometheus"] and prometheus_server_addr then %}
+    server {
+        listen {* prometheus_server_addr *};
+
+        access_log off;
+
+        location / {
+            content_by_lua_block {
+                local prometheus = require("apisix.plugins.prometheus")
+                prometheus.export_metrics()
+            }
+        }
+
+        {% if with_module_status then %}
+        location = /apisix/nginx_status {
+            allow 127.0.0.0/24;
+            deny all;
+            stub_status;
+        }
+        {% end %}
     }
     {% end %}
 
@@ -340,35 +382,42 @@ http {
                 apisix.http_admin()
             }
         }
+
+        location @50x.html {
+            set $from_error_page 'true';
+            try_files /50x.html $uri;
+        }
     }
     {% end %}
 
     server {
         {% for _, item in ipairs(node_listen) do %}
-        listen {* item.port *} {% if enable_reuseport then %} reuseport {% end %} {% if item.enable_http2 then %} http2 {% end %};
+        listen {* item.port *} default_server {% if enable_reuseport then %} reuseport {% end %} {% if item.enable_http2 then %} http2 {% end %};
         {% end %}
         {% if ssl.enable then %}
         {% for _, port in ipairs(ssl.listen_port) do %}
-        listen {* port *} ssl {% if ssl.enable_http2 then %} http2 {% end %} {% if enable_reuseport then %} reuseport {% end %};
+        listen {* port *} ssl default_server {% if ssl.enable_http2 then %} http2 {% end %} {% if enable_reuseport then %} reuseport {% end %};
         {% end %}
         {% end %}
         {% if proxy_protocol and proxy_protocol.listen_http_port then %}
-        listen {* proxy_protocol.listen_http_port *} proxy_protocol;
+        listen {* proxy_protocol.listen_http_port *} default_server proxy_protocol;
         {% end %}
         {% if proxy_protocol and proxy_protocol.listen_https_port then %}
-        listen {* proxy_protocol.listen_https_port *} ssl {% if ssl.enable_http2 then %} http2 {% end %} proxy_protocol;
+        listen {* proxy_protocol.listen_https_port *} ssl default_server {% if ssl.enable_http2 then %} http2 {% end %} proxy_protocol;
         {% end %}
 
         {% if enable_ipv6 then %}
         {% for _, item in ipairs(node_listen) do %}
-        listen [::]:{* item.port *} {% if enable_reuseport then %} reuseport {% end %} {% if item.enable_http2 then %} http2 {% end %};
+        listen [::]:{* item.port *} default_server {% if enable_reuseport then %} reuseport {% end %} {% if item.enable_http2 then %} http2 {% end %};
         {% end %}
         {% if ssl.enable then %}
         {% for _, port in ipairs(ssl.listen_port) do %}
-        listen [::]:{* port *} ssl {% if ssl.enable_http2 then %} http2 {% end %} {% if enable_reuseport then %} reuseport {% end %};
+        listen [::]:{* port *} ssl default_server {% if ssl.enable_http2 then %} http2 {% end %} {% if enable_reuseport then %} reuseport {% end %};
         {% end %}
         {% end %}
         {% end %} {% -- if enable_ipv6 %}
+
+        server_name _;
 
         {% if ssl.ssl_trusted_certificate ~= nil then %}
         lua_ssl_trusted_certificate {* ssl.ssl_trusted_certificate *};
@@ -396,17 +445,6 @@ http {
         {% end %}
         # http server configuration snippet ends
 
-        set $upstream_scheme             'http';
-        set $upstream_host               $http_host;
-        set $upstream_uri                '';
-        set $ctx_ref                     '';
-
-        {% if enabled_plugins["dubbo-proxy"] then %}
-        set $dubbo_service_name          '';
-        set $dubbo_service_version       '';
-        set $dubbo_method                '';
-        {% end %}
-
         {% if with_module_status then %}
         location = /apisix/nginx_status {
             allow 127.0.0.0/24;
@@ -418,6 +456,10 @@ http {
 
         {% if enable_admin and not port_admin then %}
         location /apisix/admin {
+            set $upstream_scheme             'http';
+            set $upstream_host               $http_host;
+            set $upstream_uri                '';
+
             {%if allow_admin then%}
                 {% for _, allow_ip in ipairs(allow_admin) do %}
                 allow {*allow_ip*};
@@ -439,10 +481,27 @@ http {
         }
         {% end %}
 
+        {% if http.proxy_ssl_server_name then %}
+        proxy_ssl_name $upstream_host;
+        proxy_ssl_server_name on;
+        {% end %}
+
         location / {
             set $upstream_mirror_host        '';
             set $upstream_upgrade            '';
             set $upstream_connection         '';
+
+            set $upstream_scheme             'http';
+            set $upstream_host               $http_host;
+            set $upstream_uri                '';
+            set $ctx_ref                     '';
+            set $from_error_page             '';
+
+            {% if enabled_plugins["dubbo-proxy"] then %}
+            set $dubbo_service_name          '';
+            set $dubbo_service_version       '';
+            set $dubbo_method                '';
+            {% end %}
 
             access_by_lua_block {
                 apisix.http_access_phase()
@@ -455,11 +514,6 @@ http {
             proxy_set_header   X-Real-IP         $remote_addr;
             proxy_pass_header  Date;
 
-            {% if http.proxy_ssl_server_name then %}
-            proxy_ssl_name $host;
-            proxy_ssl_server_name on;
-            {% end %}
-
             ### the following x-forwarded-* headers is to send to upstream server
 
             set $var_x_forwarded_for        $remote_addr;
@@ -469,9 +523,6 @@ http {
 
             if ($http_x_forwarded_for != "") {
                 set $var_x_forwarded_for "${http_x_forwarded_for}, ${realip_remote_addr}";
-            }
-            if ($http_x_forwarded_proto != "") {
-                set $var_x_forwarded_proto $http_x_forwarded_proto;
             }
             if ($http_x_forwarded_host != "") {
                 set $var_x_forwarded_host $http_x_forwarded_host;
@@ -524,52 +575,6 @@ http {
             }
         }
 
-        {% if use_or_1_15 then %}
-        # hack for OpenResty before 1.17.8, which doesn't support variable inside grpc_pass
-        location @1_15_grpc_pass {
-            access_by_lua_block {
-                apisix.grpc_access_phase()
-            }
-
-            grpc_set_header   Content-Type application/grpc;
-            grpc_socket_keepalive on;
-            grpc_pass         grpc://apisix_backend;
-
-            header_filter_by_lua_block {
-                apisix.http_header_filter_phase()
-            }
-
-            body_filter_by_lua_block {
-                apisix.http_body_filter_phase()
-            }
-
-            log_by_lua_block {
-                apisix.http_log_phase()
-            }
-        }
-
-        location @1_15_grpcs_pass {
-            access_by_lua_block {
-                apisix.grpc_access_phase()
-            }
-
-            grpc_set_header   Content-Type application/grpc;
-            grpc_socket_keepalive on;
-            grpc_pass         grpcs://apisix_backend;
-
-            header_filter_by_lua_block {
-                apisix.http_header_filter_phase()
-            }
-
-            body_filter_by_lua_block {
-                apisix.http_body_filter_phase()
-            }
-
-            log_by_lua_block {
-                apisix.http_log_phase()
-            }
-        }
-        {% else %}
         location @grpc_pass {
 
             access_by_lua_block {
@@ -592,7 +597,6 @@ http {
                 apisix.http_log_phase()
             }
         }
-        {% end %}
 
         {% if enabled_plugins["dubbo-proxy"] then %}
         location @dubbo_pass {
@@ -631,6 +635,18 @@ http {
             proxy_pass $upstream_mirror_host$request_uri;
         }
         {% end %}
+
+        location @50x.html {
+            set $from_error_page 'true';
+            try_files /50x.html $uri;
+            header_filter_by_lua_block {
+                apisix.http_header_filter_phase()
+            }
+
+            log_by_lua_block {
+                apisix.http_log_phase()
+            }
+        }
     }
     # http end configuration snippet starts
     {% if http_end_configuration_snippet then %}

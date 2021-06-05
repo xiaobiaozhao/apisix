@@ -111,6 +111,17 @@ local desc_def = {
 }
 
 
+local timeout_def = {
+    type = "object",
+    properties = {
+        connect = {type = "number", exclusiveMinimum = 0},
+        send = {type = "number", exclusiveMinimum = 0},
+        read = {type = "number", exclusiveMinimum = 0},
+    },
+    required = {"connect", "send", "read"},
+}
+
+
 local health_checker = {
     type = "object",
     properties = {
@@ -322,6 +333,16 @@ local nodes_schema = {
 }
 
 
+local certificate_scheme = {
+    type = "string", minLength = 128, maxLength = 64*1024
+}
+
+
+local private_key_schema = {
+    type = "string", minLength = 128, maxLength = 64*1024
+}
+
+
 local upstream_schema = {
     type = "object",
     properties = {
@@ -332,14 +353,14 @@ local upstream_schema = {
             type = "integer",
             minimum = 0,
         },
-        timeout = {
+        timeout = timeout_def,
+        tls = {
             type = "object",
             properties = {
-                connect = {type = "number", exclusiveMinimum = 0},
-                send = {type = "number", exclusiveMinimum = 0},
-                read = {type = "number", exclusiveMinimum = 0},
+                client_cert = certificate_scheme,
+                client_key = private_key_schema,
             },
-            required = {"connect", "send", "read"},
+            required = {"client_cert", "client_key"},
         },
         type = {
             description = "algorithms of load balancing",
@@ -371,6 +392,19 @@ local upstream_schema = {
             description = "discovery type",
             type = "string",
         },
+        discovery_args = {
+            type = "object",
+            properties = {
+                namespace_id = {
+                    description = "namespace id",
+                    type = "string",
+                },
+                group_name = {
+                    description = "group name",
+                    type = "string",
+                },
+            }
+        },
         pass_host = {
             description = "mod of host passing",
             type = "string",
@@ -386,11 +420,6 @@ local upstream_schema = {
             minLength = 1
         },
         id = id_schema,
-        -- deprecate fields, will be removed soon
-        enable_websocket = {
-            description = "enable websocket for request",
-            type        = "boolean",
-        },
     },
     oneOf = {
         {required = {"type", "nodes"}},
@@ -422,6 +451,15 @@ _M.upstream_hash_vars_combinations_schema = {
 }
 
 
+local method_schema = {
+    description = "HTTP method",
+    type = "string",
+    enum = {"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD",
+        "OPTIONS", "CONNECT", "TRACE"},
+}
+_M.method_schema = method_schema
+
+
 _M.route = {
     type = "object",
     properties = {
@@ -443,12 +481,7 @@ _M.route = {
 
         methods = {
             type = "array",
-            items = {
-                description = "HTTP method",
-                type = "string",
-                enum = {"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD",
-                        "OPTIONS", "CONNECT", "TRACE"}
-            },
+            items = method_schema,
             uniqueItems = true,
         },
         host = host_def,
@@ -465,14 +498,9 @@ _M.route = {
             minItems = 1,
             uniqueItems = true,
         },
+        timeout = timeout_def,
         vars = {
             type = "array",
-            items = {
-                description = "Nginx builtin variable name and value",
-                type = "array",
-                maxItems = 4,
-                minItems = 2,
-            },
         },
         filter_func = {
             type = "string",
@@ -600,8 +628,6 @@ _M.consumer = {
         create_time = timestamp_def,
         update_time = timestamp_def,
         desc = desc_def,
-        -- deprecate fields, will be removed soon
-        id = id_schema,
     },
     required = {"username"},
     additionalProperties = false,
@@ -615,12 +641,8 @@ _M.ssl = {
     type = "object",
     properties = {
         id = id_schema,
-        cert = {
-            type = "string", minLength = 128, maxLength = 64*1024
-        },
-        key = {
-            type = "string", minLength = 128, maxLength = 64*1024
-        },
+        cert = certificate_scheme,
+        key = private_key_schema,
         sni = {
             type = "string",
             pattern = [[^\*?[0-9a-zA-Z-.]+$]],
@@ -635,19 +657,23 @@ _M.ssl = {
         },
         certs = {
             type = "array",
-            items = {
-                type = "string",
-                minLength = 128,
-                maxLength = 64*1024,
-            }
+            items = certificate_scheme,
         },
         keys = {
             type = "array",
-            items = {
-                type = "string",
-                minLength = 128,
-                maxLength = 64*1024,
-            }
+            items = private_key_schema,
+        },
+        client = {
+            type = "object",
+            properties = {
+                ca = certificate_scheme,
+                depth = {
+                    type = "integer",
+                    minimum = 0,
+                    default = 1,
+                },
+            },
+            required = {"ca"},
         },
         exptime = {
             type = "integer",
@@ -677,6 +703,10 @@ _M.ssl = {
 _M.proto = {
     type = "object",
     properties = {
+        id = id_schema,
+        desc = desc_def,
+        create_time = timestamp_def,
+        update_time = timestamp_def,
         content = {
             type = "string", minLength = 1, maxLength = 1024*1024
         }
@@ -703,6 +733,9 @@ _M.stream_route = {
     type = "object",
     properties = {
         id = id_schema,
+        desc = desc_def,
+        create_time = timestamp_def,
+        update_time = timestamp_def,
         remote_addr = remote_addr_def,
         server_addr = {
             description = "server IP",

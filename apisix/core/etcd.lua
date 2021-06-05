@@ -24,6 +24,7 @@ local tonumber         = tonumber
 local _M = {}
 
 
+-- this function create the etcd client instance used in the Admin API
 local function new()
     local local_conf, err = fetch_local_conf()
     if not local_conf then
@@ -40,8 +41,16 @@ local function new()
     etcd_conf.ssl_verify = true
 
     -- default to verify etcd cluster certificate
-    if etcd_conf.tls and etcd_conf.tls.verify == false then
-        etcd_conf.ssl_verify = false
+    etcd_conf.ssl_verify = true
+    if etcd_conf.tls then
+        if etcd_conf.tls.verify == false then
+            etcd_conf.ssl_verify = false
+        end
+
+        if etcd_conf.tls.cert then
+            etcd_conf.ssl_cert_path = etcd_conf.tls.cert
+            etcd_conf.ssl_key_path = etcd_conf.tls.key
+        end
     end
 
     local etcd_cli
@@ -89,6 +98,15 @@ end
 function _M.get_format(res, real_key, is_dir, formatter)
     if res.body.error == "etcdserver: user name is empty" then
         return nil, "insufficient credentials code: 401"
+    end
+
+    if res.body.error == "etcdserver: permission denied" then
+        return nil, "etcd forbidden code: 403"
+    end
+
+    if res.body.error then
+        -- other errors, like "grpc: received message larger than max"
+        return nil, res.body.error
     end
 
     res.headers["X-Etcd-Index"] = res.body.header.revision

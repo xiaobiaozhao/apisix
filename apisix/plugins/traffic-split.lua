@@ -17,7 +17,6 @@
 local core       = require("apisix.core")
 local upstream   = require("apisix.upstream")
 local schema_def = require("apisix.schema_def")
-local init       = require("apisix.init")
 local roundrobin = require("resty.roundrobin")
 local ipmatcher  = require("resty.ipmatcher")
 local expr       = require("resty.expr.v1")
@@ -33,48 +32,6 @@ local lrucache = core.lrucache.new({
 
 local vars_schema = {
     type = "array",
-    items = {
-        type = "array",
-        items = {
-            {
-                type = "string",
-                minLength = 1,
-                maxLength = 100
-            },
-            {
-                type = "string",
-                minLength = 1,
-                maxLength = 2
-            }
-        },
-        additionalItems = {
-            anyOf = {
-                {type = "string"},
-                {type = "number"},
-                {type = "boolean"},
-                {
-                    type = "array",
-                    items = {
-                        anyOf = {
-                            {
-                                type = "string",
-                                minLength = 1, maxLength = 100
-                            },
-                            {
-                                type = "number"
-                            },
-                            {
-                                type = "boolean"
-                            }
-                        }
-                    },
-                    uniqueItems = true
-                }
-            }
-        },
-        minItems = 0,
-        maxItems = 10
-    }
 }
 
 
@@ -86,9 +43,6 @@ local match_schema = {
             vars = vars_schema
         }
     },
-    -- When there is no `match` rule, the default rule passes.
-    -- Perform upstream logic of plugin configuration.
-    default = {{ vars = {{"server_port", ">", 0}}}}
 }
 
 
@@ -154,50 +108,39 @@ function _M.check_schema(conf)
         return false, err
     end
 
+    if conf.rules then
+        for _, rule in ipairs(conf.rules) do
+            if rule.match then
+                for _, m in ipairs(rule.match) do
+                    local ok, err = expr.new(m.vars)
+                    if not ok then
+                        return false, "failed to validate the 'vars' expression: " .. err
+                    end
+                end
+            end
+        end
+    end
+
     return true
 end
 
 
 local function parse_domain_for_node(node)
-    if not ipmatcher.parse_ipv4(node)
-       and not ipmatcher.parse_ipv6(node)
+    local host = node.host
+    if not ipmatcher.parse_ipv4(host)
+       and not ipmatcher.parse_ipv6(host)
     then
-        local ip, err = init.parse_domain(node)
+        node.domain = host
+
+        local ip, err = core.resolver.parse_domain(host)
         if ip then
-            return ip
+            node.host = ip
         end
 
         if err then
-            return nil, err
+            core.log.error("dns resolver domain: ", host, " error: ", err)
         end
     end
-
-    return node
-end
-
-
-local function set_pass_host(ctx, upstream_info, host)
-    -- Currently only supports a single upstream of the domain name.
-    -- When the upstream is `IP`, do not do any `pass_host` operation.
-    if not core.utils.parse_ipv4(host)
-       and not core.utils.parse_ipv6(host)
-    then
-        local pass_host = upstream_info.pass_host or "pass"
-        if pass_host == "pass" then
-            ctx.var.upstream_host = ctx.var.host
-            return
-        end
-
-        if pass_host == "rewrite" then
-            ctx.var.upstream_host = upstream_info.upstream_host
-            return
-        end
-
-        ctx.var.upstream_host = host
-        return
-    end
-
-    return
 end
 
 
@@ -206,30 +149,29 @@ local function set_upstream(upstream_info, ctx)
     local new_nodes = {}
     if core.table.isarray(nodes) then
         for _, node in ipairs(nodes) do
-            set_pass_host(ctx, upstream_info, node.host)
-            node.host = parse_domain_for_node(node.host)
-            node.port = node.port
-            node.weight = node.weight
+            parse_domain_for_node(node)
             table_insert(new_nodes, node)
         end
     else
         for addr, weight in pairs(nodes) do
             local node = {}
-            local ip, port, host
+            local port, host
             host, port = core.utils.parse_addr(addr)
-            set_pass_host(ctx, upstream_info, host)
-            ip = parse_domain_for_node(host)
-            node.host = ip
+            node.host = host
+            parse_domain_for_node(node)
             node.port = port
             node.weight = weight
             table_insert(new_nodes, node)
         end
     end
-    core.log.info("upstream_host: ", ctx.var.upstream_host)
 
     local up_conf = {
         name = upstream_info.name,
         type = upstream_info.type,
+        hash_on = upstream_info.hash_on,
+        pass_host = upstream_info.pass_host,
+        upstream_host = upstream_info.upstream_host,
+        key = upstream_info.key,
         nodes = new_nodes,
         timeout = {
             send = upstream_info.timeout and upstream_info.timeout.send or 15,
@@ -270,6 +212,7 @@ local function new_rr_obj(weighted_upstreams)
             -- Mark empty upstream services in the plugin.
             upstream_obj.upstream = "plugin#upstream#is#empty"
             server_list[upstream_obj.upstream] = upstream_obj.weight
+
         end
     end
 
@@ -282,9 +225,15 @@ function _M.access(conf, ctx)
         return
     end
 
-    local weighted_upstreams, match_flag
+    local weighted_upstreams
+    local match_passed = true
+
     for _, rule in ipairs(conf.rules) do
-        match_flag = true
+        if not rule.match then
+            weighted_upstreams = rule.weighted_upstreams
+            break
+        end
+
         for _, single_match in ipairs(rule.match) do
             local expr, err = expr.new(single_match.vars)
             if err then
@@ -292,20 +241,21 @@ function _M.access(conf, ctx)
                 return 500, err
             end
 
-            match_flag = expr:eval(ctx.var)
-            if match_flag then
+            match_passed = expr:eval(ctx.var)
+            if match_passed then
                 break
             end
         end
 
-        if match_flag then
+        if match_passed then
             weighted_upstreams = rule.weighted_upstreams
             break
         end
     end
-    core.log.info("match_flag: ", match_flag)
 
-    if not match_flag then
+    core.log.info("match_passed: ", match_passed)
+
+    if not match_passed then
         return
     end
 
@@ -320,13 +270,13 @@ function _M.access(conf, ctx)
         core.log.info("upstream: ", core.json.encode(upstream))
         return set_upstream(upstream, ctx)
     elseif upstream and upstream ~= "plugin#upstream#is#empty" then
-        ctx.matched_route.value.upstream_id = upstream
+        ctx.upstream_id = upstream
         core.log.info("upstream_id: ", upstream)
         return
     end
 
+    ctx.upstream_id = nil
     core.log.info("route_up: ", upstream)
-    ctx.matched_route.value.upstream_id = nil
     return
 end
 

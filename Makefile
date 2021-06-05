@@ -33,13 +33,18 @@ ifeq ($(shell test -d $(addprefix $(OR_PREFIX), openssl111) && echo -n yes), yes
 endif
 
 ifeq ($(UNAME), Darwin)
-LUAROCKS=luarocks --lua-dir=/usr/local/opt/lua@5.1
-ifeq ($(shell test -d /usr/local/opt/openresty-openssl && echo yes), yes)
-	OPENSSL_PREFIX=/usr/local/opt/openresty-openssl
+LUAROCKS=luarocks --lua-dir=$(HOMEBREW_PREFIX)/opt/lua@5.1
+ifeq ($(shell test -d $(HOMEBREW_PREFIX)/opt/openresty-openssl && echo yes), yes)
+	OPENSSL_PREFIX=$(HOMEBREW_PREFIX)/opt/openresty-openssl
 endif
-ifeq ($(shell test -d /usr/local/opt/openresty-openssl111 && echo yes), yes)
-	OPENSSL_PREFIX=/usr/local/opt/openresty-openssl111
+ifeq ($(shell test -d $(HOMEBREW_PREFIX)/opt/openresty-openssl111 && echo yes), yes)
+	OPENSSL_PREFIX=$(HOMEBREW_PREFIX)/opt/openresty-openssl111
 endif
+endif
+
+LUAROCKS_SERVER_OPT =
+ifneq ($(LUAROCKS_SERVER), )
+	LUAROCKS_SERVER_OPT = --server ${LUAROCKS_SERVER}
 endif
 
 SHELL := /bin/bash -o pipefail
@@ -80,14 +85,14 @@ else
 	$(LUAROCKS) config --local variables.OPENSSL_LIBDIR $(addprefix $(OPENSSL_PREFIX), /lib)
 	$(LUAROCKS) config --local variables.OPENSSL_INCDIR $(addprefix $(OPENSSL_PREFIX), /include)
 endif
-	$(LUAROCKS) install rockspec/apisix-master-0.rockspec --tree=deps --only-deps --local
+	$(LUAROCKS) install rockspec/apisix-master-0.rockspec --tree=deps --only-deps --local $(LUAROCKS_SERVER_OPT)
 else
 	@echo "WARN: You're not using LuaRocks 3.x, please add the following items to your LuaRocks config file:"
 	@echo "variables = {"
 	@echo "    OPENSSL_LIBDIR=$(addprefix $(OPENSSL_PREFIX), /lib)"
 	@echo "    OPENSSL_INCDIR=$(addprefix $(OPENSSL_PREFIX), /include)"
 	@echo "}"
-	luarocks install rockspec/apisix-master-0.rockspec --tree=deps --only-deps --local
+	luarocks install rockspec/apisix-master-0.rockspec --tree=deps --only-deps --local $(LUAROCKS_SERVER_OPT)
 endif
 
 
@@ -193,6 +198,9 @@ install: default
 	$(INSTALL) -d $(INST_LUADIR)/apisix/plugins
 	$(INSTALL) apisix/plugins/*.lua $(INST_LUADIR)/apisix/plugins/
 
+	$(INSTALL) -d $(INST_LUADIR)/apisix/plugins/ext-plugin
+	$(INSTALL) apisix/plugins/ext-plugin/*.lua $(INST_LUADIR)/apisix/plugins/ext-plugin/
+
 	$(INSTALL) -d $(INST_LUADIR)/apisix/plugins/grpc-transcode
 	$(INSTALL) apisix/plugins/grpc-transcode/*.lua $(INST_LUADIR)/apisix/plugins/grpc-transcode/
 
@@ -228,6 +236,7 @@ install: default
 
 
 ### test:             Run the test case
+.PHONY: test
 test:
 	git submodule update --init --recursive
 	prove -I../test-nginx/lib -I./ -r -s t/
@@ -235,14 +244,14 @@ test:
 ### license-check:    Check Lua source code for Apache License
 .PHONY: license-check
 license-check:
-ifeq ("$(wildcard .travis/openwhisk-utilities/scancode/scanCode.py)", "")
-	git clone https://github.com/apache/openwhisk-utilities.git .travis/openwhisk-utilities
-	cp .travis/ASF* .travis/openwhisk-utilities/scancode/
+ifeq ("$(wildcard ci/openwhisk-utilities/scancode/scanCode.py)", "")
+	git clone https://github.com/apache/openwhisk-utilities.git ci/openwhisk-utilities
+	cp ci/ASF* ci/openwhisk-utilities/scancode/
 endif
-	.travis/openwhisk-utilities/scancode/scanCode.py --config .travis/ASF-Release.cfg ./
+	ci/openwhisk-utilities/scancode/scanCode.py --config ci/ASF-Release.cfg ./
 
+.PHONY: release-src
 release-src: compress-tar
-
 	gpg --batch --yes --armor --detach-sig $(RELEASE_SRC).tgz
 	shasum -a 512 $(RELEASE_SRC).tgz > $(RELEASE_SRC).tgz.sha512
 
@@ -251,6 +260,7 @@ release-src: compress-tar
 	mv $(RELEASE_SRC).tgz.asc release/$(RELEASE_SRC).tgz.asc
 	mv $(RELEASE_SRC).tgz.sha512 release/$(RELEASE_SRC).tgz.sha512
 
+.PHONY: compress-tar
 compress-tar:
 	tar -zcvf $(RELEASE_SRC).tgz \
 	./apisix \
